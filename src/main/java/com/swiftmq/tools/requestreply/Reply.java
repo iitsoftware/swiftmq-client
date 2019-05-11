@@ -28,7 +28,7 @@ import java.io.*;
  * to a Request, identified by a RequestNumber. The Reply could also be an exception. In that
  * case the ok-flag is not set and the exception contains the exception.
  *
- * @Author Andreas Mueller, IIT GmbH
+ * @author Andreas Mueller, IIT GmbH
  * @Version 1.0
  */
 public class Reply implements Dumpable, Serializable {

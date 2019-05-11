@@ -18,7 +18,7 @@
 package com.swiftmq.tools.requestreply;
 
 /**
- * @Author Andreas Mueller, IIT GmbH
+ * @author Andreas Mueller, IIT GmbH
  * @Version 1.0
  */
 public class TimeoutException extends Exception {

@@ -30,7 +30,7 @@ import java.util.Enumeration;
 import java.util.NoSuchElementException;
 
 /**
- * @Author Andreas Mueller, IIT GmbH
+ * @author Andreas Mueller, IIT GmbH
  * @Version 1.0
  */
 public class ConnectionMetaDataImpl implements ConnectionMetaData, Enumeration {

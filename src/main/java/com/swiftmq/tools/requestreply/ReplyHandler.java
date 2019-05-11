@@ -20,7 +20,7 @@ package com.swiftmq.tools.requestreply;
 /**
  * A ReplyHandler performs a Reply back to the Request via a communication link.
  *
- * @Author Andreas Mueller, IIT GmbH
+ * @author Andreas Mueller, IIT GmbH
  * @Version 1.0
  */
 public interface ReplyHandler {

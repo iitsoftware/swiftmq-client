@@ -31,7 +31,7 @@ import java.util.Vector;
  * and value change on properties will be propagated on all registered listeners. The propagation
  * will also take place on load, so this class could be an initializer for an application, based on properties!
  *
- * @Author Andreas Mueller, IIT GmbH
+ * @author Andreas Mueller, IIT GmbH
  * @Version 1.0
  */
 public class EventProperties extends Properties {
