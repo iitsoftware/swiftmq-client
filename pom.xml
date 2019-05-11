@@ -190,8 +190,8 @@
               </execution>
             </executions>
             <configuration>
-              <keyname>${gpg.keyname}</keyname>
-              <passphrase>${gpg.passphrase}</passphrase>
+              <gpg.keyname>${gpg.keyname}</gpg.keyname>
+              <gpg.passphrase>${gpg.passphrase}</gpg.passphrase>
             </configuration>
           </plugin>
         </plugins>
