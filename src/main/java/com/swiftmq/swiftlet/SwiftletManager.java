@@ -84,6 +84,7 @@ import java.util.*;
  * @author IIT GmbH, Bremen/Germany, Copyright (c) 2000-2002, All Rights Reserved
  */
 public class SwiftletManager {
+    static final String PROP_INITIAL_CONFIG = "swiftmq.initialconfig";
     static final String PROP_PRECONFIG = "swiftmq.preconfig";
     static final String ATTR_PRECONFIG = "preconfig-applied";
     static final String PROP_SHUTDOWN_HOOK = "swiftmq.shutdown.hook";
@@ -462,6 +463,13 @@ public class SwiftletManager {
         return table;
     }
 
+    private Document getInitialConfig() throws Exception {
+        String initialConfig = System.getProperty(PROP_INITIAL_CONFIG);
+        if (initialConfig != null && initialConfig.trim().length() > 0)
+            return XMLUtilities.createDocument(new FileInputStream(initialConfig));
+        return routerConfig;
+    }
+
     /**
      * Checks and applies a preconfiguration.
      *
@@ -470,10 +478,11 @@ public class SwiftletManager {
     private void checkAndApplyPreconfig() throws Exception {
         String preconfig = System.getProperty(PROP_PRECONFIG);
         if (preconfig != null && preconfig.trim().length() > 0) {
-            Attribute preconfigAttr = routerConfig.getRootElement().attribute(ATTR_PRECONFIG);
+            Document initialConfig = getInitialConfig();
+            Attribute preconfigAttr = initialConfig.getRootElement().attribute(ATTR_PRECONFIG);
             if (preconfigAttr == null || !preconfigAttr.getValue().equals("true")) {
                 XMLUtilities.writeDocument(routerConfig, configFilename + fmt.format(new Date()));
-                routerConfig = new PreConfigurator(routerConfig, XMLUtilities.createDocument(new FileInputStream(preconfig))).applyChanges();
+                routerConfig = new PreConfigurator(initialConfig, XMLUtilities.createDocument(new FileInputStream(preconfig))).applyChanges();
                 routerConfig.getRootElement().addAttribute(ATTR_PRECONFIG, "true");
                 XMLUtilities.writeDocument(routerConfig, configFilename);
                 System.out.println("Applied changes from preconfig file: " + preconfig);

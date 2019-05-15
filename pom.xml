@@ -7,7 +7,7 @@
 
   <groupId>com.swiftmq</groupId>
   <artifactId>swiftmq-client</artifactId>
-  <version>12.0.0-Beta2</version>
+  <version>12.0.0-Beta3</version>
 
   <name>SwiftMQ Client</name>
   <description>Client for SwiftMQ Messaging System with JMS, AMQP 1.0 and file transfer over JMS.</description>
