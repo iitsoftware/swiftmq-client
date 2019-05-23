@@ -478,11 +478,10 @@ public class SwiftletManager {
     private void checkAndApplyPreconfig() throws Exception {
         String preconfig = System.getProperty(PROP_PRECONFIG);
         if (preconfig != null && preconfig.trim().length() > 0) {
-            Document initialConfig = getInitialConfig();
-            Attribute preconfigAttr = initialConfig.getRootElement().attribute(ATTR_PRECONFIG);
+            Attribute preconfigAttr = routerConfig.getRootElement().attribute(ATTR_PRECONFIG);
             if (preconfigAttr == null || !preconfigAttr.getValue().equals("true")) {
                 XMLUtilities.writeDocument(routerConfig, configFilename + fmt.format(new Date()));
-                routerConfig = new PreConfigurator(initialConfig, XMLUtilities.createDocument(new FileInputStream(preconfig))).applyChanges();
+                routerConfig = new PreConfigurator(getInitialConfig(), XMLUtilities.createDocument(new FileInputStream(preconfig))).applyChanges();
                 routerConfig.getRootElement().addAttribute(ATTR_PRECONFIG, "true");
                 XMLUtilities.writeDocument(routerConfig, configFilename);
                 System.out.println("Applied changes from preconfig file: " + preconfig);
