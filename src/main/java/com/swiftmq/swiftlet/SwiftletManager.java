@@ -472,11 +472,15 @@ public class SwiftletManager {
         if (preconfig != null && preconfig.trim().length() > 0) {
             Attribute preconfigAttr = routerConfig.getRootElement().attribute(ATTR_PRECONFIG);
             if (preconfigAttr == null || !preconfigAttr.getValue().equals("true")) {
-                XMLUtilities.writeDocument(routerConfig, configFilename + fmt.format(new Date()));
-                routerConfig = new PreConfigurator(routerConfig, XMLUtilities.createDocument(new FileInputStream(preconfig))).applyChanges();
-                routerConfig.getRootElement().addAttribute(ATTR_PRECONFIG, "true");
-                XMLUtilities.writeDocument(routerConfig, configFilename);
-                System.out.println("Applied changes from preconfig file: " + preconfig);
+                StringTokenizer t = new StringTokenizer(preconfig, ",");
+                while (t.hasMoreTokens()) {
+                    String pc = t.nextToken();
+                    XMLUtilities.writeDocument(routerConfig, configFilename + fmt.format(new Date()));
+                    routerConfig = new PreConfigurator(routerConfig, XMLUtilities.createDocument(new FileInputStream(pc))).applyChanges();
+                    routerConfig.getRootElement().addAttribute(ATTR_PRECONFIG, "true");
+                    XMLUtilities.writeDocument(routerConfig, configFilename);
+                    System.out.println("Applied changes from preconfig file: " + pc);
+                }
             }
         }
     }
@@ -934,6 +938,8 @@ public class SwiftletManager {
             root.addAttribute("kernelpath", routerConfig.getRootElement().attributeValue("kernelpath"));
             root.addAttribute("release", Version.getKernelConfigRelease());
             root.addAttribute("startorder", routerConfig.getRootElement().attributeValue("startorder"));
+            if (routerConfig.getRootElement().attribute(ATTR_PRECONFIG) != null)
+                root.addAttribute(ATTR_PRECONFIG, routerConfig.getRootElement().attributeValue(ATTR_PRECONFIG));
             boolean b = ((Boolean) entity.getEntity(Configuration.ENV_ENTITY).getProperty("use-smart-tree").getValue()).booleanValue();
             if (!b)
                 root.addAttribute("use-smart-tree", "false");
