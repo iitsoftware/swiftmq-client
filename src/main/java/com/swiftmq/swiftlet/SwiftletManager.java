@@ -84,6 +84,7 @@ import java.util.*;
  * @author IIT GmbH, Bremen/Germany, Copyright (c) 2000-2002, All Rights Reserved
  */
 public class SwiftletManager {
+    static final String PROP_INITIAL_CONFIG = "swiftmq.initialconfig";
     static final String PROP_PRECONFIG = "swiftmq.preconfig";
     static final String ATTR_PRECONFIG = "preconfig-applied";
     static final String PROP_SHUTDOWN_HOOK = "swiftmq.shutdown.hook";
@@ -460,6 +461,13 @@ public class SwiftletManager {
             table.put(b.getBundleName(), b);
         }
         return table;
+    }
+
+    private Document getInitialConfig() throws Exception {
+        String initialConfig = System.getProperty(PROP_INITIAL_CONFIG);
+        if (initialConfig != null && initialConfig.trim().length() > 0)
+            return XMLUtilities.createDocument(new FileInputStream(initialConfig));
+        return routerConfig;
     }
 
     /**
