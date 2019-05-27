@@ -18,5 +18,5 @@
 package com.swiftmq.filetransfer.protocol;
 
 public interface ProtocolVisitor extends MessageBasedRequestVisitor {
-    public void visit(ProtocolRequest request);
+    void visit(ProtocolRequest request);
 }

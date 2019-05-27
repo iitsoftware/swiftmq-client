@@ -32,5 +32,5 @@ public interface ProgressListener {
      * @param bytesTransferred   number of bytes transferred
      * @param transferredPercent percent transferred
      */
-    public void progress(String filename, int chunksTransferred, long fileSize, long bytesTransferred, int transferredPercent);
+    void progress(String filename, int chunksTransferred, long fileSize, long bytesTransferred, int transferredPercent);
 }

@@ -61,9 +61,9 @@ public abstract class MessageBasedReply implements MessageBased {
     }
 
     public String toString() {
-        StringBuffer sb = new StringBuffer("[MessageBasedReply");
-        sb.append(", ok=" + ok);
-        sb.append(", exception=" + exception);
+        StringBuilder sb = new StringBuilder("[MessageBasedReply");
+        sb.append(", ok=").append(ok);
+        sb.append(", exception=").append(exception);
         sb.append("]");
         return sb.toString();
     }
