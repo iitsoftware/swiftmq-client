@@ -21,5 +21,5 @@ import javax.jms.JMSException;
 import javax.jms.Message;
 
 public interface MessageBased {
-    public Message toMessage() throws JMSException;
+    Message toMessage() throws JMSException;
 }

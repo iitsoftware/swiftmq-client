@@ -24,7 +24,6 @@ import com.swiftmq.tools.requestreply.RequestRegistry;
 
 import javax.jms.*;
 import java.io.File;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -122,8 +121,7 @@ public abstract class Filetransfer {
         Message msg = request.toMessage();
         msg.setJMSReplyTo(accessorHolder.replyQueue);
         if (properties != null) {
-            for (Iterator<Map.Entry<String, Object>> iter = properties.entrySet().iterator(); iter.hasNext(); ) {
-                Map.Entry<String, Object> entry = iter.next();
+            for (Map.Entry<String, Object> entry : properties.entrySet()) {
                 msg.setObjectProperty(entry.getKey(), entry.getValue());
             }
         }
