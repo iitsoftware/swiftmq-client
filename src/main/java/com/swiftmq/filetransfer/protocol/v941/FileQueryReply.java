@@ -42,7 +42,7 @@ public class FileQueryReply extends MessageBasedReply {
     private void createResultList(MapMessage message) throws JMSException {
         int n = message.getInt(RESULTSIZE_PROP);
         if (n > 0) {
-            result = new ArrayList<String>(n);
+            result = new ArrayList<>(n);
             for (int i = 0; i < n; i++) {
                 result.add(message.getString(new StringBuilder(RESULT_PROP).append(i).toString()));
             }
