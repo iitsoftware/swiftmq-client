@@ -34,7 +34,6 @@ import com.swiftmq.tools.log.NullPrintStream;
 import com.swiftmq.upgrade.UpgradeUtilities;
 import com.swiftmq.util.SwiftUtilities;
 import com.swiftmq.util.Version;
-import org.dom4j.Attribute;
 import org.dom4j.Document;
 import org.dom4j.DocumentHelper;
 import org.dom4j.Element;
@@ -86,7 +85,6 @@ import java.util.*;
 public class SwiftletManager {
     static final String PROP_INITIAL_CONFIG = "swiftmq.initialconfig";
     static final String PROP_PRECONFIG = "swiftmq.preconfig";
-    static final String ATTR_PRECONFIG = "preconfig-applied";
     static final String PROP_SHUTDOWN_HOOK = "swiftmq.shutdown.hook";
     static final String PROP_REUSE_KERNEL_CL = "swiftmq.reuse.kernel.classloader";
     static final long PROP_CONFIG_WATCHDOG_INTERVAL = Long.parseLong(System.getProperty("swiftmq.config.watchdog.interval", "0"));
@@ -120,7 +118,7 @@ public class SwiftletManager {
     boolean startup = false;
     boolean rebooting = false;
     boolean workingDirAdded = false;
-    boolean registerShutdownHook = Boolean.valueOf(System.getProperty(PROP_SHUTDOWN_HOOK, "true")).booleanValue();
+    boolean registerShutdownHook = Boolean.valueOf(System.getProperty(PROP_SHUTDOWN_HOOK, "true"));
     boolean quietMode = false;
     boolean strippedMode = false;
     boolean doFireKernelStartedEvent = true;
@@ -245,8 +243,8 @@ public class SwiftletManager {
             new SwiftletDeployer();
 
             // Next: start the other kernel swiftlets
-            for (int i = 0; i < kernelSwiftletNames.length; i++) {
-                actSwiftletName = kernelSwiftletNames[i];
+            for (String kernelSwiftletName : kernelSwiftletNames) {
+                actSwiftletName = kernelSwiftletName;
                 startKernelSwiftlet(actSwiftletName, swiftletTable);
             }
         } catch (Exception e) {
@@ -299,8 +297,8 @@ public class SwiftletManager {
             }
             al.add(swiftletTable.get("sys$trace"));
         }
-        for (int i = 0; i < al.size(); i++) {
-            Swiftlet swiftlet = (Swiftlet) al.get(i);
+        for (Object anAl : al) {
+            Swiftlet swiftlet = (Swiftlet) anAl;
             try {
                 shutdownSwiftlet(swiftlet);
             } catch (SwiftletException ignored) {
@@ -310,8 +308,7 @@ public class SwiftletManager {
     }
 
     private void fillSwiftletTable() {
-        for (int i = 0; i < kernelSwiftletNames.length; i++)
-            swiftletTable.put(kernelSwiftletNames[i], null);
+        for (String kernelSwiftletName : kernelSwiftletNames) swiftletTable.put(kernelSwiftletName, null);
     }
 
     public String getWorkingDirectory() {
@@ -446,7 +443,7 @@ public class SwiftletManager {
         if (dp == null)
             dp = new DeployPath(f, true, getClass().getClassLoader());
         else {
-            boolean reuseCL = Boolean.valueOf(System.getProperty(PROP_REUSE_KERNEL_CL, "false")).booleanValue();
+            boolean reuseCL = Boolean.valueOf(System.getProperty(PROP_REUSE_KERNEL_CL, "false"));
             if (reuseCL)
                 dp.init();
             else
@@ -456,8 +453,8 @@ public class SwiftletManager {
         if (events == null)
             throw new Exception("No Kernel Swiftlets found in 'kernelpath'");
         Map table = new HashMap();
-        for (int i = 0; i < events.length; i++) {
-            Bundle b = events[i].getBundle();
+        for (BundleEvent event : events) {
+            Bundle b = event.getBundle();
             table.put(b.getBundleName(), b);
         }
         return table;
@@ -478,13 +475,13 @@ public class SwiftletManager {
     private void checkAndApplyPreconfig() throws Exception {
         String preconfig = System.getProperty(PROP_PRECONFIG);
         if (preconfig != null && preconfig.trim().length() > 0) {
-            Attribute preconfigAttr = routerConfig.getRootElement().attribute(ATTR_PRECONFIG);
-            if (preconfigAttr == null || !preconfigAttr.getValue().equals("true")) {
+            StringTokenizer t = new StringTokenizer(preconfig, ",");
+            while (t.hasMoreTokens()) {
+                String pc = t.nextToken();
                 XMLUtilities.writeDocument(routerConfig, configFilename + fmt.format(new Date()));
-                routerConfig = new PreConfigurator(getInitialConfig(), XMLUtilities.createDocument(new FileInputStream(preconfig))).applyChanges();
-                routerConfig.getRootElement().addAttribute(ATTR_PRECONFIG, "true");
+                routerConfig = new PreConfigurator(routerConfig, XMLUtilities.createDocument(new FileInputStream(pc))).applyChanges();
                 XMLUtilities.writeDocument(routerConfig, configFilename);
-                System.out.println("Applied changes from preconfig file: " + preconfig);
+                System.out.println("Applied changes from preconfig file: " + pc);
             }
         }
     }
@@ -516,11 +513,11 @@ public class SwiftletManager {
         while (t.hasMoreTokens())
             kernelSwiftletNames[i++] = t.nextToken();
         if (root.attributeValue("use-smart-tree") != null)
-            smartTree = Boolean.valueOf(root.attributeValue("use-smart-tree")).booleanValue();
+            smartTree = Boolean.valueOf(root.attributeValue("use-smart-tree"));
         else
             smartTree = true;
         if (root.attributeValue("memory-collect-interval") != null)
-            memCollectInterval = Long.valueOf(root.attributeValue("memory-collect-interval")).longValue();
+            memCollectInterval = Long.valueOf(root.attributeValue("memory-collect-interval"));
         routerName = root.attributeValue("name");
 
         bundleTable = createBundleTable(root.attributeValue("kernelpath"));
@@ -536,11 +533,7 @@ public class SwiftletManager {
 
         // shutdown hook
         if (shutdownHook == null && registerShutdownHook) {
-            shutdownHook = new Thread() {
-                public void run() {
-                    shutdown();
-                }
-            };
+            shutdownHook = new Thread(() -> shutdown());
             Runtime.getRuntime().addShutdownHook(shutdownHook);
         }
     }
@@ -553,56 +546,49 @@ public class SwiftletManager {
         RouterConfiguration.Singleton().createCommands(); // for compatibility
         CommandRegistry commandRegistry = new CommandRegistry("current Router's Swiftlet Manager", null);
         RouterConfiguration.Singleton().setCommandRegistry(commandRegistry);
-        CommandExecutor rebootExecutor = new CommandExecutor() {
-            public String[] execute(String[] context, Entity entity, String[] cmd) {
-                if (cmd.length != 1)
-                    return new String[]{TreeCommands.ERROR, "Invalid command, please try 'reboot'"};
-                String[] result = new String[]{TreeCommands.INFO, "Reboot Launch in 10 Seconds."};
-                Thread t = new Thread(Thread.currentThread().getThreadGroup().getParent(), "Reboot Thread") {
-                    public void run() {
-                        reboot(10000);
-                    }
-                };
-                t.setDaemon(false); // Important: Must be a non-daemon, otherwise the shutdown hook is activated!
-                t.setPriority(1); // IMPORTANT!!! MINIMUM PRIORITY IS REQUIRED
-                t.start();
-                return result;
-            }
+        CommandExecutor rebootExecutor = (context, entity, cmd) -> {
+            if (cmd.length != 1)
+                return new String[]{TreeCommands.ERROR, "Invalid command, please try 'reboot'"};
+            String[] result = new String[]{TreeCommands.INFO, "Reboot Launch in 10 Seconds."};
+            Thread t = new Thread(Thread.currentThread().getThreadGroup().getParent(), "Reboot Thread") {
+                public void run() {
+                    reboot(10000);
+                }
+            };
+            t.setDaemon(false); // Important: Must be a non-daemon, otherwise the shutdown hook is activated!
+            t.setPriority(1); // IMPORTANT!!! MINIMUM PRIORITY IS REQUIRED
+            t.start();
+            return result;
         };
         Command rebootCommand = new Command("reboot", "reboot", "Reboot the Router", true, rebootExecutor, true, false);
         commandRegistry.addCommand(rebootCommand);
-        CommandExecutor haltExecutor = new CommandExecutor() {
-            public String[] execute(String[] context, Entity entity, String[] cmd) {
-                if (cmd.length != 1)
-                    return new String[]{TreeCommands.ERROR, "Invalid command, please try 'halt'"};
-                String[] result = new String[]{TreeCommands.INFO, "Router Halt in 10 Seconds."};
-                ;
-                Thread t = new Thread(Thread.currentThread().getThreadGroup().getParent(), "Halt Thread") {
-                    public void run() {
-                        try {
-                            Thread.sleep(10000);
-                        } catch (Exception ignored) {
-                        }
-                        shutdown(true);
-                        System.exit(0);
+        CommandExecutor haltExecutor = (context, entity, cmd) -> {
+            if (cmd.length != 1)
+                return new String[]{TreeCommands.ERROR, "Invalid command, please try 'halt'"};
+            String[] result = new String[]{TreeCommands.INFO, "Router Halt in 10 Seconds."};
+            Thread t = new Thread(Thread.currentThread().getThreadGroup().getParent(), "Halt Thread") {
+                public void run() {
+                    try {
+                        Thread.sleep(10000);
+                    } catch (Exception ignored) {
                     }
-                };
-                t.setDaemon(false); // Important: Must be a non-daemon, otherwise the shutdown hook is activated!
-                t.start();
-                t.setPriority(1); // IMPORTANT!!! MINIMUM PRIORITY IS REQUIRED
-                return result;
-            }
+                    shutdown(true);
+                    System.exit(0);
+                }
+            };
+            t.setDaemon(false); // Important: Must be a non-daemon, otherwise the shutdown hook is activated!
+            t.start();
+            t.setPriority(1); // IMPORTANT!!! MINIMUM PRIORITY IS REQUIRED
+            return result;
         };
         Command haltCommand = new Command("halt", "halt", "Halt the Router", true, haltExecutor, true, false);
         commandRegistry.addCommand(haltCommand);
-        CommandExecutor saveExecutor = new CommandExecutor() {
-            public String[] execute(String[] context, Entity entity, String[] cmd) {
-                if (cmd.length > 1)
-                    return new String[]{TreeCommands.ERROR, "Invalid command, please try 'save'"};
-                String[] result = null;
-                result = saveConfiguration(RouterConfiguration.Singleton());
-                return result;
-            }
+        CommandExecutor saveExecutor = (context, entity, cmd) -> {
+            if (cmd.length > 1)
+                return new String[]{TreeCommands.ERROR, "Invalid command, please try 'save'"};
+            String[] result = null;
+            result = saveConfiguration(RouterConfiguration.Singleton());
+            return result;
         };
         Command saveCommand = new Command("save", "save", "Save this Router Configuration", true, saveExecutor, true, false);
         commandRegistry.addCommand(saveCommand);
@@ -646,7 +632,7 @@ public class SwiftletManager {
             prop.setType(Boolean.class);
             prop.setDisplayName("Use Smart Management Tree");
             prop.setDescription("Use Smart Management Tree (reduced Usage Parts)");
-            prop.setValue(new Boolean(smartTree));
+            prop.setValue(smartTree);
             prop.setRebootRequired(true);
             envEntity.addProperty(prop.getName(), prop);
             prop = new Property("release");
@@ -699,7 +685,7 @@ public class SwiftletManager {
             prop.setType(Long.class);
             prop.setDisplayName("Memory Collect Interval");
             prop.setDescription("Memory Collect Interval (ms)");
-            prop.setValue(new Long(memCollectInterval));
+            prop.setValue(memCollectInterval);
             prop.setReadOnly(false);
             prop.setStorable(false);
             envEntity.addProperty(prop.getName(), prop);
@@ -711,9 +697,8 @@ public class SwiftletManager {
         fillSwiftletTable();
         startKernelSwiftlets();
         Set keySet = swiftletTable.keySet();
-        Iterator iter = keySet.iterator();
-        while (iter.hasNext()) {
-            String name = (String) iter.next();
+        for (Object aKeySet : keySet) {
+            String name = (String) aKeySet;
             Swiftlet swiftlet = (Swiftlet) swiftletTable.get(name);
             if (swiftlet.getState() == Swiftlet.STATE_ACTIVE) {
                 Configuration config = (Configuration) RouterConfiguration.Singleton().getConfigurations().get(name);
@@ -736,11 +721,7 @@ public class SwiftletManager {
      * Reboots this router without delay. A separate thread is used. The method returns immediately.
      */
     public void reboot() {
-        new Thread(new Runnable() {
-            public void run() {
-                reboot(0);
-            }
-        }).start();
+        new Thread(() -> reboot(0)).start();
     }
 
     /**
@@ -841,13 +822,13 @@ public class SwiftletManager {
         return b;
     }
 
-    private final void stopAllSwiftlets() {
+    private void stopAllSwiftlets() {
         trace("stopAllSwiftlets");
         logSwiftlet.logInformation("SwiftletManager", "stopAllSwiftlets");
         List al = new ArrayList();
         synchronized (sSemaphore) {
-            for (Iterator iter = RouterConfiguration.Singleton().getConfigurations().entrySet().iterator(); iter.hasNext(); ) {
-                Entity entity = (Entity) ((Map.Entry) iter.next()).getValue();
+            for (Object o : RouterConfiguration.Singleton().getConfigurations().entrySet()) {
+                Entity entity = (Entity) ((Map.Entry) o).getValue();
                 if (entity instanceof Configuration) {
                     Configuration conf = (Configuration) entity;
                     if (conf.isExtension()) {
@@ -860,8 +841,8 @@ public class SwiftletManager {
                 }
             }
         }
-        for (int i = 0; i < al.size(); i++) {
-            Swiftlet swiftlet = (Swiftlet) al.get(i);
+        for (Object anAl : al) {
+            Swiftlet swiftlet = (Swiftlet) anAl;
             trace("stopAllSwiftlets: Stopping swiftlet '" + swiftlet.getName() + "'");
             logSwiftlet.logInformation("SwiftletManager", "stopAllSwiftlets: Stopping swiftlet '" + swiftlet.getName() + "'");
             try {
@@ -942,21 +923,20 @@ public class SwiftletManager {
             root.addAttribute("kernelpath", routerConfig.getRootElement().attributeValue("kernelpath"));
             root.addAttribute("release", Version.getKernelConfigRelease());
             root.addAttribute("startorder", routerConfig.getRootElement().attributeValue("startorder"));
-            boolean b = ((Boolean) entity.getEntity(Configuration.ENV_ENTITY).getProperty("use-smart-tree").getValue()).booleanValue();
+            boolean b = (Boolean) entity.getEntity(Configuration.ENV_ENTITY).getProperty("use-smart-tree").getValue();
             if (!b)
                 root.addAttribute("use-smart-tree", "false");
-            long l = ((Long) entity.getEntity(Configuration.ENV_ENTITY).getProperty("memory-collect-interval").getValue()).longValue();
+            long l = (Long) entity.getEntity(Configuration.ENV_ENTITY).getProperty("memory-collect-interval").getValue();
             if (l != 10000)
                 root.addAttribute("memory-collect-interval", String.valueOf(l));
             Element[] optional = getOptionalElements();
             if (optional != null) {
-                for (int i = 0; i < optional.length; i++)
-                    XMLUtilities.elementToXML(optional[i], root);
+                for (Element anOptional : optional) XMLUtilities.elementToXML(anOptional, root);
             }
             doc.setRootElement(root);
             Map configs = entity.getEntities();
-            for (Iterator iter = configs.keySet().iterator(); iter.hasNext(); ) {
-                Entity c = (Entity) configs.get((String) iter.next());
+            for (Object o : configs.keySet()) {
+                Entity c = (Entity) configs.get((String) o);
                 if (c instanceof Configuration)
                     XMLUtilities.configToXML((Configuration) c, root);
             }
@@ -1115,8 +1095,8 @@ public class SwiftletManager {
         synchronized (lSemaphore) {
             cloned = (Set) ((HashSet) kernelListeners).clone();
         }
-        for (Iterator iter = cloned.iterator(); iter.hasNext(); ) {
-            ((KernelStartupListener) iter.next()).kernelStarted();
+        for (Object aCloned : cloned) {
+            ((KernelStartupListener) aCloned).kernelStarted();
         }
     }
 
@@ -1130,30 +1110,42 @@ public class SwiftletManager {
             }
         }
         if (myListeners != null) {
-            for (int i = 0; i < myListeners.length; i++) {
-                SwiftletManagerListener l = (SwiftletManagerListener) myListeners[i];
-                if (methodName.equals("swiftletStartInitiated"))
-                    l.swiftletStartInitiated(evt);
-                else if (methodName.equals("swiftletStarted"))
-                    l.swiftletStarted(evt);
-                else if (methodName.equals("swiftletStopInitiated"))
-                    l.swiftletStopInitiated(evt);
-                else if (methodName.equals("swiftletStopped"))
-                    l.swiftletStopped(evt);
+            for (SwiftletManagerListener myListener : myListeners) {
+                SwiftletManagerListener l = (SwiftletManagerListener) myListener;
+                switch (methodName) {
+                    case "swiftletStartInitiated":
+                        l.swiftletStartInitiated(evt);
+                        break;
+                    case "swiftletStarted":
+                        l.swiftletStarted(evt);
+                        break;
+                    case "swiftletStopInitiated":
+                        l.swiftletStopInitiated(evt);
+                        break;
+                    case "swiftletStopped":
+                        l.swiftletStopped(evt);
+                        break;
+                }
             }
         }
         myListeners = (SwiftletManagerListener[]) allListeners.toArray(new SwiftletManagerListener[allListeners.size()]);
         if (myListeners != null) {
-            for (int i = 0; i < myListeners.length; i++) {
-                SwiftletManagerListener l = (SwiftletManagerListener) myListeners[i];
-                if (methodName.equals("swiftletStartInitiated"))
-                    l.swiftletStartInitiated(evt);
-                else if (methodName.equals("swiftletStarted"))
-                    l.swiftletStarted(evt);
-                else if (methodName.equals("swiftletStopInitiated"))
-                    l.swiftletStopInitiated(evt);
-                else if (methodName.equals("swiftletStopped"))
-                    l.swiftletStopped(evt);
+            for (SwiftletManagerListener myListener : myListeners) {
+                SwiftletManagerListener l = (SwiftletManagerListener) myListener;
+                switch (methodName) {
+                    case "swiftletStartInitiated":
+                        l.swiftletStartInitiated(evt);
+                        break;
+                    case "swiftletStarted":
+                        l.swiftletStarted(evt);
+                        break;
+                    case "swiftletStopInitiated":
+                        l.swiftletStopInitiated(evt);
+                        break;
+                    case "swiftletStopped":
+                        l.swiftletStopped(evt);
+                        break;
+                }
             }
         }
     }

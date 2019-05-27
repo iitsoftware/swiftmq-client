@@ -18,7 +18,6 @@
 package com.swiftmq.filetransfer.test;
 
 import com.swiftmq.filetransfer.Filetransfer;
-import com.swiftmq.filetransfer.ProgressListener;
 
 import javax.jms.*;
 import javax.naming.Context;
@@ -37,15 +36,11 @@ public class SendFile {
         if (file.length() == 0)
             return;
         System.out.println("Transferring: " + file.getName());
-        Map<String, Object> props = new HashMap<String, Object>();
+        Map<String, Object> props = new HashMap<>();
         props.put("path", file.getPath());
         props.put("absolutepath", file.getAbsolutePath());
         props.put("canonicalpath", file.getCanonicalPath());
-        String link = filetransfer.withFile(file).withProperties(props).withPassword("Moin!").send(new ProgressListener() {
-            public void progress(String filename, int chunksTransferred, long fileSize, long bytesTransferred, int transferredPercent) {
-                System.out.println("  " + filename + ": " + chunksTransferred + " chunks, " + bytesTransferred + " of " + fileSize + " transferred (" + transferredPercent + "%)");
-            }
-        });
+        String link = filetransfer.withFile(file).withProperties(props).withPassword("Moin!").send((filename, chunksTransferred, fileSize, bytesTransferred, transferredPercent) -> System.out.println("  " + filename + ": " + chunksTransferred + " chunks, " + bytesTransferred + " of " + fileSize + " transferred (" + transferredPercent + "%)"));
         linkSender.send(session.createTextMessage(link));
     }
 
@@ -76,9 +71,9 @@ public class SendFile {
             if (file.isDirectory()) {
                 File[] files = file.listFiles();
                 if (files != null && files.length > 0) {
-                    for (int i = 0; i < files.length; i++)
-                        if (!files[i].isDirectory())
-                            transfer(files[i]);
+                    for (File file1 : files)
+                        if (!file1.isDirectory())
+                            transfer(file1);
                 }
             } else
                 transfer(file);

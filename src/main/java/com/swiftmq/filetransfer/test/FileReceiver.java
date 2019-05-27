@@ -18,7 +18,6 @@
 package com.swiftmq.filetransfer.test;
 
 import com.swiftmq.filetransfer.Filetransfer;
-import com.swiftmq.filetransfer.ProgressListener;
 
 import javax.jms.*;
 import javax.naming.Context;
@@ -36,11 +35,7 @@ public class FileReceiver {
     private static void transfer(String link) throws Exception {
         System.out.println("Transferring: " + link);
         Filetransfer filetransfer = Filetransfer.create(connection, link).withDigestType("MD5");
-        filetransfer.withOriginalFilename(true).withOutputDirectory(outDir).withPassword("Moin!").receive(new ProgressListener() {
-            public void progress(String filename, int chunksTransferred, long fileSize, long bytesTransferred, int transferredPercent) {
-                System.out.println("  " + filename + ": " + chunksTransferred + " chunks, " + bytesTransferred + " of " + fileSize + " transferred (" + transferredPercent + "%)");
-            }
-        }).delete().close();
+        filetransfer.withOriginalFilename(true).withOutputDirectory(outDir).withPassword("Moin!").receive((filename, chunksTransferred, fileSize, bytesTransferred, transferredPercent) -> System.out.println("  " + filename + ": " + chunksTransferred + " chunks, " + bytesTransferred + " of " + fileSize + " transferred (" + transferredPercent + "%)")).delete().close();
     }
 
     public static void main(String[] args) {
@@ -68,13 +63,11 @@ public class FileReceiver {
             TextMessage msg = null;
             while ((msg = (TextMessage) consumer.receive()) != null) {
                 final String link = msg.getText();
-                executorService.execute(new Runnable() {
-                    public void run() {
-                        try {
-                            transfer(link);
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
+                executorService.execute(() -> {
+                    try {
+                        transfer(link);
+                    } catch (Exception e) {
+                        e.printStackTrace();
                     }
                 });
             }

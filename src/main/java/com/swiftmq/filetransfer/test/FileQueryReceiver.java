@@ -18,7 +18,6 @@
 package com.swiftmq.filetransfer.test;
 
 import com.swiftmq.filetransfer.Filetransfer;
-import com.swiftmq.filetransfer.ProgressListener;
 
 import javax.jms.Connection;
 import javax.jms.ConnectionFactory;
@@ -41,11 +40,7 @@ public class FileQueryReceiver {
     private static void transfer(String link) throws Exception {
         System.out.println("Transferring: " + link);
         Filetransfer filetransfer = Filetransfer.create(connection, link).withDigestType("MD5");
-        filetransfer.withOriginalFilename(true).withOutputDirectory(outDir).withPassword("Cheers").receive(new ProgressListener() {
-            public void progress(String filename, int chunksTransferred, long fileSize, long bytesTransferred, int transferredPercent) {
-                System.out.println("  " + filename + ": " + chunksTransferred + " chunks, " + bytesTransferred + " of " + fileSize + " transferred (" + transferredPercent + "%)");
-            }
-        }).delete().close();
+        filetransfer.withOriginalFilename(true).withOutputDirectory(outDir).withPassword("Cheers").receive((filename, chunksTransferred, fileSize, bytesTransferred, transferredPercent) -> System.out.println("  " + filename + ": " + chunksTransferred + " chunks, " + bytesTransferred + " of " + fileSize + " transferred (" + transferredPercent + "%)")).delete().close();
     }
 
     public static void main(String[] args) {
@@ -71,16 +66,13 @@ public class FileQueryReceiver {
             List<String> result = filetransfer.query();
             if (result != null && result.size() > 0) {
                 countDownLatch = new CountDownLatch(result.size());
-                for (int i = 0; i < result.size(); i++) {
-                    final String link = result.get(i);
-                    executorService.execute(new Runnable() {
-                        public void run() {
-                            try {
-                                transfer(link);
-                                countDownLatch.countDown();
-                            } catch (Exception e) {
-                                e.printStackTrace();
-                            }
+                for (final String link : result) {
+                    executorService.execute(() -> {
+                        try {
+                            transfer(link);
+                            countDownLatch.countDown();
+                        } catch (Exception e) {
+                            e.printStackTrace();
                         }
                     });
                 }
