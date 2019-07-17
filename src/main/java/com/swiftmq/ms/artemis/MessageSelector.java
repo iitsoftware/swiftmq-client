@@ -19,11 +19,11 @@ package com.swiftmq.ms.artemis;
 
 import com.swiftmq.jms.MessageImpl;
 import com.swiftmq.swiftlet.queue.Selector;
-import org.apache.activemq.artemis.api.core.SimpleString;
-import org.apache.activemq.artemis.selector.filter.BooleanExpression;
-import org.apache.activemq.artemis.selector.filter.FilterException;
-import org.apache.activemq.artemis.selector.filter.Filterable;
-import org.apache.activemq.artemis.selector.impl.SelectorParser;
+import com.swiftmq.ms.artemis.util.SimpleString;
+import com.swiftmq.ms.artemis.filter.BooleanExpression;
+import com.swiftmq.ms.artemis.filter.FilterException;
+import com.swiftmq.ms.artemis.filter.Filterable;
+import com.swiftmq.ms.artemis.impl.SelectorParser;
 
 import javax.jms.InvalidSelectorException;
 
