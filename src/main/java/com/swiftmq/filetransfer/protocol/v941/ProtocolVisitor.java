@@ -20,17 +20,17 @@ package com.swiftmq.filetransfer.protocol.v941;
 import com.swiftmq.filetransfer.protocol.MessageBasedRequestVisitor;
 
 public interface ProtocolVisitor extends MessageBasedRequestVisitor {
-    public void visit(FilePublishRequest request);
+    void visit(FilePublishRequest request);
 
-    public void visit(FileChunkRequest request);
+    void visit(FileChunkRequest request);
 
-    public void visit(FileConsumeRequest request);
+    void visit(FileConsumeRequest request);
 
-    public void visit(FileDeleteRequest request);
+    void visit(FileDeleteRequest request);
 
-    public void visit(FileQueryRequest request);
+    void visit(FileQueryRequest request);
 
-    public void visit(SessionCloseRequest request);
+    void visit(SessionCloseRequest request);
 
-    public void visit(FileQueryPropsRequest request);
+    void visit(FileQueryPropsRequest request);
 }

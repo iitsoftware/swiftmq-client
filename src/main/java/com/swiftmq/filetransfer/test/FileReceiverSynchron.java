@@ -18,7 +18,6 @@
 package com.swiftmq.filetransfer.test;
 
 import com.swiftmq.filetransfer.Filetransfer;
-import com.swiftmq.filetransfer.ProgressListener;
 
 import javax.jms.*;
 import javax.naming.Context;
@@ -33,11 +32,7 @@ public class FileReceiverSynchron {
 
     private static void transfer(String link) throws Exception {
         System.out.println("Transferring: " + link);
-        filetransfer.withLink(link).withOriginalFilename(true).withOutputDirectory(outDir).withPassword("Moin!").receive(new ProgressListener() {
-            public void progress(String filename, int chunksTransferred, long fileSize, long bytesTransferred, int transferredPercent) {
-                System.out.println("  " + filename + ": " + chunksTransferred + " chunks, " + bytesTransferred + " of " + fileSize + " transferred (" + transferredPercent + "%)");
-            }
-        }).delete();
+        filetransfer.withLink(link).withOriginalFilename(true).withOutputDirectory(outDir).withPassword("Moin!").receive((filename, chunksTransferred, fileSize, bytesTransferred, transferredPercent) -> System.out.println("  " + filename + ": " + chunksTransferred + " chunks, " + bytesTransferred + " of " + fileSize + " transferred (" + transferredPercent + "%)")).delete();
     }
 
     public static void main(String[] args) {

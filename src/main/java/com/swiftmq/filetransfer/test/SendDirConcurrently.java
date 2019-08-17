@@ -18,7 +18,6 @@
 package com.swiftmq.filetransfer.test;
 
 import com.swiftmq.filetransfer.Filetransfer;
-import com.swiftmq.filetransfer.ProgressListener;
 
 import javax.jms.*;
 import javax.naming.Context;
@@ -43,15 +42,11 @@ public class SendDirConcurrently {
             return;
         System.out.println("Transferring: " + file.getName());
         Filetransfer filetransfer = Filetransfer.create(connection, routerName, cacheName).withDigestType("MD5");
-        Map<String, Object> props = new HashMap<String, Object>();
+        Map<String, Object> props = new HashMap<>();
         props.put("orderid", new Random().nextInt());
         props.put("customerid", new Random().nextInt());
         boolean isPrivate = file.getName().contains("_eval");
-        String link = filetransfer.withFile(file).withFileIsPrivate(isPrivate).withPassword("Cheers").withProperties(props).send(new ProgressListener() {
-            public void progress(String filename, int chunksTransferred, long fileSize, long bytesTransferred, int transferredPercent) {
-                System.out.println("  " + filename + ": " + chunksTransferred + " chunks, " + bytesTransferred + " of " + fileSize + " transferred (" + transferredPercent + "%)");
-            }
-        });
+        String link = filetransfer.withFile(file).withFileIsPrivate(isPrivate).withPassword("Cheers").withProperties(props).send((filename, chunksTransferred, fileSize, bytesTransferred, transferredPercent) -> System.out.println("  " + filename + ": " + chunksTransferred + " chunks, " + bytesTransferred + " of " + fileSize + " transferred (" + transferredPercent + "%)"));
         Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
         MessageProducer linkSender = session.createProducer(linkInputQueue);
         linkSender.send(session.createTextMessage(link));
@@ -85,18 +80,16 @@ public class SendDirConcurrently {
                 File[] files = file.listFiles();
                 if (files != null && files.length > 0) {
                     final CountDownLatch countDownLatch = new CountDownLatch(files.length);
-                    for (int i = 0; i < files.length; i++)
-                        if (!files[i].isDirectory()) {
-                            final File f = files[i];
-                            executorService.execute(new Runnable() {
-                                public void run() {
-                                    try {
-                                        transfer(f);
-                                    } catch (Exception e) {
-                                        e.printStackTrace();
-                                    }
-                                    countDownLatch.countDown();
+                    for (File file1 : files)
+                        if (!file1.isDirectory()) {
+                            final File f = file1;
+                            executorService.execute(() -> {
+                                try {
+                                    transfer(f);
+                                } catch (Exception e) {
+                                    e.printStackTrace();
                                 }
+                                countDownLatch.countDown();
                             });
                         } else
                             countDownLatch.countDown();

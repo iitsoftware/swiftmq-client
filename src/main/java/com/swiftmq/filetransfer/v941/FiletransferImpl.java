@@ -289,15 +289,7 @@ public class FiletransferImpl extends Filetransfer {
                     }
                 }
             }
-        } catch (JMSException e) {
-            if (file.exists())
-                file.delete();
-            throw e;
-        } catch (FiletransferException e) {
-            if (file.exists())
-                file.delete();
-            throw e;
-        } catch (IOException e) {
+        } catch (JMSException | IOException | FiletransferException e) {
             if (file.exists())
                 file.delete();
             throw e;

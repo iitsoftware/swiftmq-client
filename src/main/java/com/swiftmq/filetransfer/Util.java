@@ -32,8 +32,7 @@ public class Util {
 
     public static String byteArrayToHexString(byte[] b) {
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < b.length; i++)
-            sb.append(String.format("%02x", b[i]));
+        for (byte aB : b) sb.append(String.format("%02x", aB));
         return sb.toString();
     }
 
