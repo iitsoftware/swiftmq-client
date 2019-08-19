@@ -8,6 +8,10 @@ SwiftMQ Client is an open source (Apache 2) library that contains:
 - SwiftMQ CLI administration client (command line interface).
 - SwiftMQ AMQP 1.0 Java client to connect to any AMQP 1.0 broker.
 
+## Documentation
+
+Find the documentation [here](https://www.swiftmq.com/docs/docs/client/intro/).
+
 ## Obtain the Library
 
 You can obtain SwiftMQ Client from Maven Central by adding this dependency to your `pom.xml`:
