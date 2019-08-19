@@ -32,7 +32,7 @@ You need Apache Maven installed on your system. Then perform a
 
     mvn clean install
     
-which generates the `tar.gz` and `zip` distributions into the `target/` directory.
+which generates the `jar` file into the `target/` directory.
 
 ## Community Support
 
