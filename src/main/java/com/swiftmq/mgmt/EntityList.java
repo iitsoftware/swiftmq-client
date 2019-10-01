@@ -17,6 +17,7 @@
 
 package com.swiftmq.mgmt;
 
+import com.swiftmq.tools.sql.LikeComparator;
 import com.swiftmq.tools.util.ObjectCloner;
 import com.swiftmq.util.SwiftUtilities;
 
@@ -328,23 +329,48 @@ public class EntityList extends Entity {
             commandRegistry.addCommand(newCommand);
         CommandExecutor delExecutor = new CommandExecutor() {
             public String[] execute(String[] context, Entity entity, String[] cmd) {
-                if (cmd.length != 2)
-                    return new String[]{TreeCommands.ERROR, "Invalid command, please try '" + DEL_COMMAND + " <entity>'"};
+                if (cmd.length < 2 || cmd.length > 3)
+                    return new String[]{TreeCommands.ERROR, "Invalid command, please try '" + DEL_COMMAND + "  <name|predicate> [-p]'"};
+                boolean isPredicate = false;
+                if (cmd.length == 3) {
+                    if (cmd[2].equals("-p"))
+                        isPredicate = true;
+                    else
+                        return new String[]{TreeCommands.ERROR, "Invalid command, please try '" + DEL_COMMAND + "  <name|predicate> [-p]'"};
+                }
                 String[] result = null;
-                Entity e = getEntity(cmd[1]);
-                if (e == null)
-                    return new String[]{TreeCommands.ERROR, "Unknown Entity: " + cmd[1]};
-                try {
-                    removeEntity(e);
-                    if (rebootOnDel)
-                        result = new String[]{TreeCommands.INFO, "To activate this Change, a Reboot of this Router is required."};
-                } catch (Exception ex) {
-                    result = new String[]{TreeCommands.ERROR, ex.getMessage()};
+                if (isPredicate) {
+                  String[] names = getEntityNames();
+                  if (names != null && names.length > 0){
+                      String predicate = cmd[1];
+                      try {
+                          for (int i=0;i<names.length;i++) {
+                             if (LikeComparator.compare(names[i], predicate, '\\')) {
+                                 removeEntity(getEntity(names[i]));
+                             }
+                          }
+                          if (rebootOnDel)
+                              result = new String[]{TreeCommands.INFO, "To activate this Change, a Reboot of this Router is required."};
+                      } catch (Exception ex) {
+                          result = new String[]{TreeCommands.ERROR, ex.getMessage()};
+                      }
+                  }
+                } else {
+                    Entity e = getEntity(cmd[1]);
+                    if (e == null)
+                        return new String[]{TreeCommands.ERROR, "Unknown Entity: " + cmd[1]};
+                    try {
+                        removeEntity(e);
+                        if (rebootOnDel)
+                            result = new String[]{TreeCommands.INFO, "To activate this Change, a Reboot of this Router is required."};
+                    } catch (Exception ex) {
+                        result = new String[]{TreeCommands.ERROR, ex.getMessage()};
+                    }
                 }
                 return result;
             }
         };
-        delCommand = new Command(DEL_COMMAND, DEL_COMMAND + " <entity>", "Delete Entity", true, delExecutor, true, true);
+        delCommand = new Command(DEL_COMMAND, DEL_COMMAND + " <name|predicate> [-p]", "Delete Entity", true, delExecutor, true, true);
         if ((rebootOnNew || autoCreateNewDel) && !isDynamic())
             commandRegistry.addCommand(delCommand);
 
