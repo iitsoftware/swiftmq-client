@@ -1,4 +1,4 @@
-package com.swiftmq.util;
+package com.swiftmq.tools.security;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;

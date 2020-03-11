@@ -1,4 +1,4 @@
-package com.swiftmq.util;
+package com.swiftmq.tools.security;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
