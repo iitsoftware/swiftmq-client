@@ -1,20 +1,15 @@
 package com.swiftmq.tools.security;
 
-import java.security.KeyStore;
+import java.util.Enumeration;
 
-public class SwiftMQKeyStore extends CertManager {
+public class StoreTrust extends Store {
 
-    private static String password = "changeme";
+    private static final String PROP_TRUSTSTORE = "javax.net.ssl.trustStore";
+    private static final String PROP_TRUSTSTORE_PASSWORD = "javax.net.ssl.truestStorePassword";
 
-    public SwiftMQKeyStore() throws Exception {
-        store = KeyStore.getInstance(KeyStore.getDefaultType());
-        store.load(null, password.toCharArray());
+    public StoreTrust() throws Exception {
+        super(PROP_TRUSTSTORE, PROP_TRUSTSTORE_PASSWORD);
     }
-
-    public KeyStore get() {
-        return store;
-    }
-
 
     public static void main(String[] args) throws Exception {
 
@@ -40,19 +35,34 @@ public class SwiftMQKeyStore extends CertManager {
                 "/mJTt9psMYpvA2Uuntmon0tL0FyIiiMNDbhUOwvzq/SMmiECq19wovTtyphb\n" +
                 "-----END CERTIFICATE-----\n";
 
-        byte[] cert = demoCert.getBytes();
+        String certPath = "/Users/mike/Freelancer/SwiftMQ/server/swiftmq-ce/distribution/target/swiftmq_ce_12.0.2_router/certs/client.truststore";
+        String password = "secret";
 
-        SwiftMQKeyStore ks = new SwiftMQKeyStore();
+        System.setProperty(PROP_TRUSTSTORE, certPath);
+        System.setProperty(PROP_TRUSTSTORE_PASSWORD, password);
 
+        StoreTrust ts = new StoreTrust();
 
-        ks.addCert("demo", cert);
-        System.out.println("Stored cert:");
-        System.out.println(ks.get().getCertificate("demo"));
+        System.out.println("BEFORE ADDING DEMO:");
+        for (Enumeration<String> aliases = ts.store.aliases(); aliases.hasMoreElements();) {
+            String alias = aliases.nextElement();
+            System.out.println("- " + alias);
+        }
 
-        ks.removeCert("demo");
-        System.out.println("Removed cert:");
-        System.out.println(ks.get().getCertificate("demo"));
+        ts.addCert("demo", demoCert.getBytes());
 
+        System.out.println("AFTER ADDING DEMO:");
+        for (Enumeration<String> aliases = (new StoreTrust()).store.aliases(); aliases.hasMoreElements();) {
+            String alias = aliases.nextElement();
+            System.out.println("- " + alias);
+        }
+
+        ts.removeCert("demo");
+
+        System.out.println("AFTER REMOVING DEMO:");
+        for (Enumeration<String> aliases = (new StoreTrust()).store.aliases(); aliases.hasMoreElements();) {
+            String alias = aliases.nextElement();
+            System.out.println("- " + alias);
+        }
     }
-
 }
