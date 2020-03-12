@@ -64,5 +64,6 @@ public class StoreKey extends Store {
             String alias = aliases.nextElement();
             System.out.println("- " + alias);
         }
+
     }
 }

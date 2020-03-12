@@ -1,9 +1,12 @@
 package com.swiftmq.tools.security;
 
 import java.io.*;
-import java.security.KeyStore;
+import java.security.*;
+import java.security.cert.Certificate;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.util.Base64;
 
 abstract class Store {
 
@@ -56,8 +59,36 @@ abstract class Store {
         save();
     }
 
+    public void addKeyPair(String name, String privateKey, String publicKey) throws Exception {
+        PrivateKey pk = buildPrivateKey(privateKey);
+        Certificate cert = buildPublicKeyCert(publicKey);
+        Certificate[] certChain = new Certificate[] { cert };
 
-    private void save() throws Exception {
+        store.setKeyEntry(name, pk, password.toCharArray(), certChain);
+        save();
+    }
+
+    public void removeKey(String name) throws Exception {
+        removeCert(name);
+    }
+
+    private PrivateKey buildPrivateKey(String key) throws Exception {
+        String encodedPrivateKey = key.replaceAll("\\n", "")
+                .replace("-----BEGIN PRIVATE KEY-----", "")
+                .replace("-----END PRIVATE KEY-----", "");
+        Base64.Decoder b64 = Base64.getDecoder();
+        byte[] decodedPrivateKey = b64.decode(encodedPrivateKey);
+        PKCS8EncodedKeySpec spec = new PKCS8EncodedKeySpec(decodedPrivateKey);
+        KeyFactory kf = KeyFactory.getInstance("RSA");
+        return kf.generatePrivate(spec);
+    }
+
+    private Certificate buildPublicKeyCert(String key) throws Exception {
+        InputStream is = new ByteArrayInputStream(key.getBytes());
+        return CertificateFactory.getInstance("X509").generateCertificate(is);
+    }
+
+    public void save() throws Exception {
         File newFile = new File(filePath);
         FileOutputStream out = new FileOutputStream(newFile);
         store.store(out, password.toCharArray());
