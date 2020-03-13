@@ -2,13 +2,10 @@ package com.swiftmq.tools.security;
 
 import java.io.*;
 import java.security.*;
-import java.security.cert.Certificate;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
-import java.security.spec.PKCS8EncodedKeySpec;
-import java.util.Base64;
 
-abstract class Store {
+public class Store {
 
     private String fileProperty;
     private String passwordProperty;
@@ -16,11 +13,9 @@ abstract class Store {
     private String password;
     protected final KeyStore store;
 
-    public Store(String fileProperty, String passwordProperty) throws Exception {
-        this.fileProperty = fileProperty;
-        this.passwordProperty = passwordProperty;
-        filePath = System.getProperty(fileProperty);
-        password = System.getProperty(passwordProperty);
+    public Store() throws Exception {
+        filePath = System.getProperty("javax.net.ssl.trustStore");
+        password = System.getProperty("javax.net.ssl.trustStorePassword");
 
         store = loadStore();
     }
