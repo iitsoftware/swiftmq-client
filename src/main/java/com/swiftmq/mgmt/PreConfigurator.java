@@ -148,8 +148,8 @@ public class PreConfigurator {
         processAttributes(changes.getRootElement(), routerconfig.getRootElement());
         for (Iterator<Element> iter = changes.getRootElement().elementIterator(); iter.hasNext(); ) {
             Element changeSwiftlet = iter.next();
-            if (!changeSwiftlet.getName().equals("swiftlet"))
-                throw new Exception("Next element after 'router' must be a 'swiftlet' element!");
+            if (!(changeSwiftlet.getName().equals("swiftlet")||changeSwiftlet.getName().equals("ha-router")))
+                throw new Exception("Next element after 'router' must be a 'ha-router' or a 'swiftlet' element!");
             Attribute name = changeSwiftlet.attribute("name");
             if (name == null)
                 throw new Exception("Missing 'name' attribute in 'swiftlet' element!");
