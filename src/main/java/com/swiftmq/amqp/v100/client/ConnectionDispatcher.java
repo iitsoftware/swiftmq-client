@@ -67,10 +67,10 @@ public class ConnectionDispatcher
     DispatchVisitor dispatchVisitor = new DispatchVisitor();
     ConnectionVisitor connectionVisitor = new ConnectionVisitor();
     AMQPInputHandler protocolHandler = new AMQPInputHandler();
-    boolean closed = false;
-    boolean closeInProgress = false;
+    volatile boolean closed = false;
+    volatile boolean closeInProgress = false;
     Lock closeLock = new ReentrantLock();
-    boolean awaitProtocolHeader = true;
+    volatile boolean awaitProtocolHeader = true;
     ProtocolHeader localProt = null;
     ProtocolHeader remoteProt = null;
     POProtocolRequest protPO = null;
@@ -88,7 +88,7 @@ public class ConnectionDispatcher
     TimerListener idleTimeoutChecker = null;
     long idleTimeoutDelay = 0;
     SaslClient saslClient = null;
-    boolean connectionDisabled = false;
+    volatile boolean connectionDisabled = false;
 
     int maxLocalFrameSize = Integer.MAX_VALUE;
     int maxRemoteFrameSize = Integer.MAX_VALUE;
@@ -411,8 +411,8 @@ public class ConnectionDispatcher
 
     public void close() {
         if (pTracer.isEnabled()) pTracer.trace(toString(), ", close ...");
-        closeLock.lock();
         try {
+            closeLock.lock();
             if (closeInProgress) {
                 if (pTracer.isEnabled()) pTracer.trace(toString(), ", close in progress, return");
                 return;

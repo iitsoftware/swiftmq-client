@@ -45,7 +45,7 @@ public class Session {
     TransactionController transactionController = null;
     Set links = new HashSet();
     Lock lock = new ReentrantLock();
-    boolean closed = false;
+    volatile boolean closed = false;
     Error error = null;
 
     protected Session(AMQPContext ctx, Connection myConnection, long incomingWindowSize, long outgoingWindowSize) {
@@ -291,8 +291,8 @@ public class Session {
     }
 
     protected void detach(Link link) {
-        lock.lock();
         try {
+            lock.lock();
             links.remove(link);
         } finally {
             lock.unlock();
@@ -322,8 +322,8 @@ public class Session {
     }
 
     private Link[] getLinksCopy() {
-        lock.lock();
         try {
+            lock.lock();
             Link[] l = null;
             l = (Link[]) links.toArray(new Link[links.size()]);
             links.clear();
@@ -351,10 +351,10 @@ public class Session {
      * Closes the session and all consumers/producers created from this session.
      */
     public void close() {
-        lock.lock();
         if (closed)
             return;
         try {
+            lock.lock();
             if (transactionController != null) {
                 transactionController.close();
                 transactionController = null;

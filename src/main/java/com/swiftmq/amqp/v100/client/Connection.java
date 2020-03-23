@@ -435,8 +435,8 @@ public class Connection implements ExceptionHandler {
     }
 
     private Session mapSessionToLocalChannel(long incomingWindowSize, long outgoingWindowSize) {
-        lock.lock();
         try {
+            lock.lock();
             Session session = new Session(ctx, this, incomingWindowSize, outgoingWindowSize);
             session.setChannel(ArrayListTool.setFirstFreeOrExpand(localChannels, session));
             return session;
@@ -464,8 +464,8 @@ public class Connection implements ExceptionHandler {
     }
 
     protected void removeSession(Session session) {
-        lock.lock();
-        try {
+         try {
+            lock.lock();
             localChannels.set(session.getChannel(), null);
         } finally {
             lock.unlock();
@@ -473,8 +473,8 @@ public class Connection implements ExceptionHandler {
     }
 
     protected Session getSessionForLocalChannel(int localChannel) {
-        lock.lock();
         try {
+            lock.lock();
             if (localChannel >= 0 && localChannel < localChannels.size())
                 return (Session) localChannels.get(localChannel);
             return null;
@@ -484,8 +484,8 @@ public class Connection implements ExceptionHandler {
     }
 
     protected void mapSessionToRemoteChannel(Session session, int remoteChannel) {
-        lock.lock();
-        try {
+         try {
+            lock.lock();
             Util.ensureSize(remoteChannels, remoteChannel + 1);
             remoteChannels.set(remoteChannel, session);
         } finally {
@@ -494,8 +494,8 @@ public class Connection implements ExceptionHandler {
     }
 
     protected void unmapSessionFromRemoteChannel(int remoteChannel) {
-        lock.lock();
-        try {
+         try {
+            lock.lock();
             Util.ensureSize(remoteChannels, remoteChannel + 1);
             remoteChannels.set(remoteChannel, null);
         } finally {
@@ -504,9 +504,9 @@ public class Connection implements ExceptionHandler {
     }
 
     protected Session getSessionForRemoteChannel(int remoteChannel) {
-        lock.lock();
-        try {
-            if (remoteChannel >= 0 && remoteChannel < remoteChannels.size())
+         try {
+           lock.lock();
+           if (remoteChannel >= 0 && remoteChannel < remoteChannels.size())
                 return (Session) remoteChannels.get(remoteChannel);
             return null;
         } finally {
@@ -525,8 +525,8 @@ public class Connection implements ExceptionHandler {
         if (closed)
             return;
         List cloned = null;
-        lock.lock();
         try {
+            lock.lock();
             if (closed)
                 return;
             cloned = (List) ((ArrayList) localChannels).clone();
