@@ -147,16 +147,20 @@ public class PreConfigurator {
     public Document applyChanges() throws Exception {
         processAttributes(changes.getRootElement(), routerconfig.getRootElement());
         for (Iterator<Element> iter = changes.getRootElement().elementIterator(); iter.hasNext(); ) {
-            Element changeSwiftlet = iter.next();
-            if (!(changeSwiftlet.getName().equals("swiftlet")||changeSwiftlet.getName().equals("ha-router")))
+            Element changeElement = iter.next();
+            if (!(changeElement.getName().equals("swiftlet")||changeElement.getName().equals("ha-router")))
                 throw new Exception("Next element after 'router' must be a 'ha-router' or a 'swiftlet' element!");
-            Attribute name = changeSwiftlet.attribute("name");
-            if (name == null)
-                throw new Exception("Missing 'name' attribute in 'swiftlet' element!");
-            Element configSwiftlet = XMLUtilities.getSwiftletElement(name.getValue(), routerconfig.getRootElement());
-            if (configSwiftlet == null)
-                throw new Exception("Swiftlet with name '" + name.getValue() + "' not found!");
-            processElement(changeSwiftlet, configSwiftlet, false);
+            if (changeElement.getName().equals("swiftlet")) {
+                Attribute name = changeElement.attribute("name");
+                if (name == null)
+                    throw new Exception("Missing 'name' attribute in 'swiftlet' element!");
+                Element configSwiftlet = XMLUtilities.getSwiftletElement(name.getValue(), routerconfig.getRootElement());
+                if (configSwiftlet == null)
+                    throw new Exception("Swiftlet with name '" + name.getValue() + "' not found!");
+                processElement(changeElement, configSwiftlet, false);
+            } else {
+                processElement(changeElement, routerconfig.getRootElement().element("ha-router"), false);
+            }
         }
         return routerconfig;
     }
