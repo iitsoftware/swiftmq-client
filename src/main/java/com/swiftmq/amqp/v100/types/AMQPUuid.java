@@ -66,7 +66,7 @@ public class AMQPUuid extends AMQPType {
     public void setValue(long mostSigBits, long leastSigBits) {
         bytes = new byte[16];
         Util.writeLong(mostSigBits, bytes, 0);
-        Util.writeLong(leastSigBits, bytes, 4);
+        Util.writeLong(leastSigBits, bytes, 8);
     }
 
     /**
@@ -75,7 +75,7 @@ public class AMQPUuid extends AMQPType {
      * @return UUID
      */
     public UUID getValue() {
-        return new UUID(Util.readLong(bytes, 0), Util.readLong(bytes, 4));
+        return new UUID(Util.readLong(bytes, 0), Util.readLong(bytes, 8));
     }
 
     public int getPredictedSize() {
@@ -99,5 +99,13 @@ public class AMQPUuid extends AMQPType {
 
     public String toString() {
         return "[AMQPUuid, UUID=" + getValue() + ", bytes.length=" + (bytes == null ? "null" : bytes.length) + " " + super.toString() + "]";
+    }
+
+    public static void main(String[] args){
+        // test
+        UUID uuid = UUID.fromString("7d146cc0-7995-11ea-ab12-0800200c9a66");
+        AMQPUuid amqpUuid = new AMQPUuid(uuid);
+        System.out.println(uuid);
+        System.out.println(amqpUuid.getValue());
     }
 }
