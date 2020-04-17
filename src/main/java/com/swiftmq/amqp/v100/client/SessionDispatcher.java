@@ -66,8 +66,8 @@ public class SessionDispatcher
     BeginFrame remoteBegin = null;
     POSendEnd endPO = null;
     EndFrame remoteEnd = null;
-    boolean closed = false;
-    boolean closeInProgress = false;
+    volatile boolean closed = false;
+    volatile boolean closeInProgress = false;
     Lock closeLock = new ReentrantLock();
     ArrayList handles = new ArrayList();
     Map remoteHandles = new HashMap();
@@ -672,11 +672,11 @@ public class SessionDispatcher
 
     public void close() {
         if (pTracer.isEnabled()) pTracer.trace(toString(), ", close ...");
-        closeLock.lock();
         if (closeInProgress) {
             if (pTracer.isEnabled()) pTracer.trace(toString(), ", close in progress, return");
             return;
         }
+        closeLock.lock();
         closeInProgress = true;
         closeLock.unlock();
         Semaphore sem = new Semaphore();

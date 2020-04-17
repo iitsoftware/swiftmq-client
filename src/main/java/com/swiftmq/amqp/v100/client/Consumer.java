@@ -111,9 +111,9 @@ public class Consumer extends Link {
     }
 
     protected void fillCache(long lastDeliveryId) {
-        cacheLock.lock();
         try {
-            if (linkCredit == 0)
+           cacheLock.lock();
+           if (linkCredit == 0)
                 linkCredit = DEFAULT_LINKCREDIT;
             currentLinkCredit = linkCredit;
             mySession.dispatch(new POFillCache(this, linkCredit, lastDeliveryId, currentTx));
@@ -124,9 +124,9 @@ public class Consumer extends Link {
     }
 
     protected void addToCache(AMQPMessage message) {
-        cacheLock.lock();
         try {
-            cache.add(message);
+           cacheLock.lock();
+           cache.add(message);
             if (cache.size() == 1) {
                 if (messageAvailabilityListener != null) {
                     messageAvailabilityListener.messageAvailable(this);
@@ -180,11 +180,11 @@ public class Consumer extends Link {
 
     private AMQPMessage receive(long timeout, MessageAvailabilityListener messageAvailabilityListener) {
         AMQPMessage msg = null;
-        cacheLock.lock();
         if (closed)
             return null;
         try {
-            if (cache.size() == 0) {
+           cacheLock.lock();
+           if (cache.size() == 0) {
                 if (timeout > 0) {
                     try {
                         cacheEmpty.await(timeout, TimeUnit.MILLISECONDS);
@@ -240,8 +240,8 @@ public class Consumer extends Link {
     }
 
     public void close() throws AMQPException {
-        cacheLock.lock();
         try {
+            cacheLock.lock();
             cacheEmpty.signal();
         } finally {
             cacheLock.unlock();
@@ -252,8 +252,8 @@ public class Consumer extends Link {
     protected void cancel() {
         super.cancel();
 
-        cacheLock.lock();
         try {
+            cacheLock.lock();
             cacheEmpty.signal();
         } finally {
             cacheLock.unlock();
