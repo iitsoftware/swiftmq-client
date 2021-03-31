@@ -15,29 +15,30 @@
  *
  */
 
-package com.swiftmq.amqp.v100.client;
+package com.swiftmq.amqp.v100.client.po;
 
-import com.swiftmq.amqp.v100.client.po.*;
+import com.swiftmq.amqp.v100.client.ConnectionVisitor;
+import com.swiftmq.amqp.v100.client.Session;
+import com.swiftmq.tools.pipeline.POObject;
 import com.swiftmq.tools.pipeline.POVisitor;
 
-public interface ConnectionVisitor extends POVisitor {
-    public void visit(POProtocolRequest po);
+public class PORemoteSessionClose extends POObject {
+    Session session = null;
 
-    public void visit(POProtocolResponse po);
+    public PORemoteSessionClose(Session session) {
+        super(null, null);
+        this.session = session;
+    }
 
-    public void visit(POAuthenticate po);
+    public Session getSession() {
+        return session;
+    }
 
-    public void visit(POOpen po);
+    public void accept(POVisitor visitor) {
+        ((ConnectionVisitor) visitor).visit(this);
+    }
 
-    public void visit(POConnectionFrameReceived po);
-
-    public void visit(POSendHeartBeat po);
-
-    public void visit(POCheckIdleTimeout po);
-
-    public void visit(POSendClose po);
-
-    public void visit(PORemoteSessionClose po);
-
-    public void visit(POConnectionClose po);
+    public String toString() {
+        return "[PORemoteSessionClose]";
+    }
 }

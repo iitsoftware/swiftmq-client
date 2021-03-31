@@ -91,6 +91,10 @@ public class Session {
         return sessionDispatcher;
     }
 
+    protected void remoteClose() {
+        myConnection.connectionDispatcher.dispatch(new PORemoteSessionClose(this));
+    }
+
     protected int getRemoteChannel() {
         return remoteChannel;
     }

@@ -33,8 +33,8 @@ import com.swiftmq.amqp.v100.generated.transactions.coordination.Coordinator;
 import com.swiftmq.amqp.v100.generated.transactions.coordination.TransactionalState;
 import com.swiftmq.amqp.v100.generated.transactions.coordination.TxnCapability;
 import com.swiftmq.amqp.v100.generated.transactions.coordination.TxnIdIF;
-import com.swiftmq.amqp.v100.generated.transport.definitions.*;
 import com.swiftmq.amqp.v100.generated.transport.definitions.Error;
+import com.swiftmq.amqp.v100.generated.transport.definitions.*;
 import com.swiftmq.amqp.v100.generated.transport.performatives.*;
 import com.swiftmq.amqp.v100.messaging.AMQPMessage;
 import com.swiftmq.amqp.v100.transport.HeartbeatFrame;
@@ -120,7 +120,8 @@ public class SessionDispatcher
             endPO.setSuccess(true);
             endPO.getSemaphore().notifySingleWaiter();
             endPO = null;
-        }
+        } else if (endPO == null && remoteEnd != null)
+            mySession.remoteClose();
     }
 
     private void sendFlow() {
