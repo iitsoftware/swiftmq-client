@@ -398,6 +398,13 @@ public class ConnectionDispatcher
         if (pTracer.isEnabled()) pTracer.trace(toString(), ", visit, po=" + po + " done");
     }
 
+    @Override
+    public void visit(PORemoteSessionClose po) {
+        if (pTracer.isEnabled()) pTracer.trace(toString(), ", visit, po=" + po + " ...");
+        po.getSession().close();
+        if (pTracer.isEnabled()) pTracer.trace(toString(), ", visit, po=" + po + " done");
+    }
+
     public void visit(POConnectionClose po) {
         if (pTracer.isEnabled()) pTracer.trace(toString(), ", visit, po=" + po + " ...");
         notifyWaitingPOs(new POObject[]{protPO, authPO, openPO, closePO});
