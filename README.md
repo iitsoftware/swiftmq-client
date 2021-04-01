@@ -20,7 +20,7 @@ You can obtain SwiftMQ Client from Maven Central by adding this dependency to yo
      <dependency>
        <groupId>com.swiftmq</groupId>
        <artifactId>swiftmq-client</artifactId>
-       <version>12.2.1</version>
+       <version>12.2.2</version>
      </dependency>
 ```
 
