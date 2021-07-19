@@ -417,7 +417,9 @@ public class Connector implements ReconnectVisitor, InboundHandler, ExceptionHan
                 dispatch(new POReconnect(sem, recreatableConnection, true));
             }
         } else {
-            if (recreatableConnection.getSetClientIdRequest() == null)
+            if (recreatableConnection.getSetClientIdRequest() != null)
+                dispatch(new POSetClientIdRequest());
+            else
                 new Recreator().start();
         }
         if (debug) System.out.println(toString() + ", visit, po=" + po + " done");
