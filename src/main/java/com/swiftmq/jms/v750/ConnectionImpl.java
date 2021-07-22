@@ -42,9 +42,9 @@ import com.swiftmq.tools.util.DataStreamOutputStream;
 import com.swiftmq.tools.util.LengthCaptureDataInput;
 import com.swiftmq.util.SwiftUtilities;
 
-import javax.jms.*;
 import javax.jms.IllegalStateException;
 import javax.jms.Queue;
+import javax.jms.*;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -256,7 +256,7 @@ public class ConnectionImpl extends RequestServiceRegistry
     }
 
     public Request getGetClientIdRequest() {
-        return internalCID == null ? null : new GetClientIdRequest(0);
+        return new GetClientIdRequest(0);
     }
 
     public void setGetClientIdReply(Reply reply) throws Exception {
