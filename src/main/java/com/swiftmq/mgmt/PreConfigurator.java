@@ -155,9 +155,14 @@ public class PreConfigurator {
                 if (name == null)
                     throw new Exception("Missing 'name' attribute in 'swiftlet' element!");
                 Element configSwiftlet = XMLUtilities.getSwiftletElement(name.getValue(), routerconfig.getRootElement());
-                if (configSwiftlet == null)
-                    throw new Exception("Swiftlet with name '" + name.getValue() + "' not found!");
-                processElement(changeElement, configSwiftlet, false);
+                String op = getOp(changeElement);
+                if (configSwiftlet == null) {
+                    if (op != null && op.equals("add"))
+                        processElement(changeElement, routerconfig.getRootElement(), true);
+                    else
+                        throw new Exception("Swiftlet with name '" + name.getValue() + "' not found!");
+                } else
+                    processElement(changeElement, configSwiftlet, false);
             } else {
                 processElement(changeElement, routerconfig.getRootElement().element("ha-router"), false);
             }
