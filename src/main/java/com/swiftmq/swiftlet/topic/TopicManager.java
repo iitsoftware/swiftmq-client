@@ -126,7 +126,6 @@ public abstract class TopicManager extends Swiftlet {
      * For example, 'iit.sales.eu'  will return String[]{'iit','sales','eu'}.
      *
      * @param topicName topic name.
-     * @param delimiter delimiter.
      * @return tokenized array.
      */
     public String[] tokenizeTopicName(String topicName) {
@@ -152,6 +151,23 @@ public abstract class TopicManager extends Swiftlet {
     /**
      * Subscribes to a topic.
      *
+     * @param topicName topic name.
+     * @param selector  selector or null.
+     * @param noLocal   no-local flag.
+     * @param queueName subscriber queue name.
+     * @param forceCopy forces a message copy for this subscription.
+     * @return subscription id.
+     * @throws AuthenticationException on authentication error.
+     */
+    public int subscribe(String topicName, Selector selector, boolean noLocal, String queueName, boolean forceCopy)
+            throws AuthenticationException {
+        TopicImpl topic = new TopicImpl(getQueueForTopic(topicName), topicName);
+        return subscribe(topic, selector, noLocal, queueName, null, forceCopy);
+    }
+
+    /**
+     * Subscribes to a topic.
+     *
      * @param topicName   topic name.
      * @param selector    selector or null.
      * @param noLocal     no-local flag.
@@ -168,7 +184,7 @@ public abstract class TopicManager extends Swiftlet {
     /**
      * Subscribes to a topic.
      *
-     * @param topicName   topic.
+     * @param topic       topic.
      * @param selector    selector or null.
      * @param noLocal     no-local flag.
      * @param activeLogin active login object.
@@ -176,6 +192,20 @@ public abstract class TopicManager extends Swiftlet {
      * @throws AuthenticationException on authentication error.
      */
     public abstract int subscribe(TopicImpl topic, Selector selector, boolean noLocal, String queueName, ActiveLogin activeLogin)
+            throws AuthenticationException;
+
+    /**
+     * Subscribes to a topic.
+     *
+     * @param topic       topic.
+     * @param selector    selector or null.
+     * @param noLocal     no-local flag.
+     * @param activeLogin active login object.
+     * @param forceCopy   forces a message copy for this subscription.
+     * @return subscription id.
+     * @throws AuthenticationException on authentication error.
+     */
+    public abstract int subscribe(TopicImpl topic, Selector selector, boolean noLocal, String queueName, ActiveLogin activeLogin, boolean forceCopy)
             throws AuthenticationException;
 
     /**
