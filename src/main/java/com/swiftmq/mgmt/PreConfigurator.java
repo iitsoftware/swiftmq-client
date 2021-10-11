@@ -54,13 +54,6 @@ public class PreConfigurator {
         return element.attribute(OP).getValue();
     }
 
-    private void setOp(Element element, String value) throws Exception {
-        if (element.attribute(OP) == null)
-            element.addAttribute(OP, value);
-        else
-            element.attribute(OP).setValue(value);
-    }
-
     private boolean hasName(String name, Element element) {
         for (Iterator<Attribute> iter = element.attributeIterator(); iter.hasNext(); ) {
             Attribute attribute = iter.next();
@@ -168,10 +161,8 @@ public class PreConfigurator {
                         processElement(changeElement, routerconfig.getRootElement(), true);
                     else
                         throw new Exception("Swiftlet with name '" + name.getValue() + "' not found!");
-                } else {
-                    setOp(changeElement, "replace");
+                } else
                     processElement(changeElement, configSwiftlet, false);
-                }
             } else {
                 processElement(changeElement, routerconfig.getRootElement().element("ha-router"), false);
             }
