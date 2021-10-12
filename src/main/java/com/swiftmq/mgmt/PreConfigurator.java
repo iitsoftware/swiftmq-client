@@ -76,6 +76,41 @@ public class PreConfigurator {
         return null;
     }
 
+    private Element getSwiftletElement(String name) throws Exception {
+        Element root = routerconfig.getRootElement();
+        Element configSwiftlet = XMLUtilities.getSwiftletElement(name, root);
+        if (configSwiftlet == null) {
+            switch (name) {
+                case "xt$amqpbridge":
+                    configSwiftlet = root.addElement("swiftlet");
+                    configSwiftlet.addAttribute("name", name);
+                    configSwiftlet.addElement("bridges091");
+                    configSwiftlet.addElement("bridges100");
+                    break;
+                case "xt$javamail":
+                    configSwiftlet = root.addElement("swiftlet");
+                    configSwiftlet.addAttribute("name", name);
+                    configSwiftlet.addElement("inbound-bridges");
+                    configSwiftlet.addElement("outbound-bridges");
+                    break;
+                case "xt$jmsbridge":
+                    configSwiftlet = root.addElement("swiftlet");
+                    configSwiftlet.addAttribute("name", name);
+                    configSwiftlet.addElement("servers");
+                    break;
+                case "xt$replicator":
+                    configSwiftlet = root.addElement("swiftlet");
+                    configSwiftlet.addAttribute("name", name);
+                    configSwiftlet.addElement("sinks");
+                    configSwiftlet.addElement("sources");
+                    break;
+                default:
+                    break;
+            }
+        }
+        return configSwiftlet;
+    }
+
     private void clearElements(Element root) {
         for (Iterator<Element> iter = root.elementIterator(); iter.hasNext(); ) {
             Element child = iter.next();
@@ -154,15 +189,11 @@ public class PreConfigurator {
                 Attribute name = changeElement.attribute("name");
                 if (name == null)
                     throw new Exception("Missing 'name' attribute in 'swiftlet' element!");
-                Element configSwiftlet = XMLUtilities.getSwiftletElement(name.getValue(), routerconfig.getRootElement());
+                Element configSwiftlet = getSwiftletElement(name.getValue());
                 String op = getOp(changeElement);
-                if (configSwiftlet == null) {
-                    if (op != null && op.equals("add"))
-                        processElement(changeElement, routerconfig.getRootElement(), true);
-                    else
-                        throw new Exception("Swiftlet with name '" + name.getValue() + "' not found!");
-                } else
-                    processElement(changeElement, configSwiftlet, false);
+                if (configSwiftlet == null)
+                    throw new Exception("Swiftlet with name '" + name.getValue() + "' not found!");
+                processElement(changeElement, configSwiftlet, false);
             } else {
                 processElement(changeElement, routerconfig.getRootElement().element("ha-router"), false);
             }
