@@ -59,19 +59,19 @@ public class RouterMemoryMeter implements TimerListener, MgmtListener {
             try {
                 Entity tplEntity = new Entity("router-memory", "Router Memory", "Router Memory", null);
                 Property prop = new Property("free-memory");
-                prop.setType(Integer.class);
+                prop.setType(Long.class);
                 prop.setDisplayName("Free Memory (KB)");
                 prop.setDescription("Free Memory (KB)");
-                prop.setDefaultValue(new Integer(0));
+                prop.setDefaultValue(0);
                 prop.setRebootRequired(false);
                 prop.setReadOnly(true);
                 prop.setMandatory(true);
                 tplEntity.addProperty(prop.getName(), prop);
                 prop = new Property("total-memory");
-                prop.setType(Integer.class);
+                prop.setType(Long.class);
                 prop.setDisplayName("Total Memory (KB)");
                 prop.setDescription("Total Memory (KB)");
-                prop.setDefaultValue(new Integer(0));
+                prop.setDefaultValue(0);
                 prop.setRebootRequired(false);
                 prop.setReadOnly(true);
                 prop.setMandatory(true);
@@ -130,8 +130,8 @@ public class RouterMemoryMeter implements TimerListener, MgmtListener {
 
     public void performTimeAction() {
         try {
-            freeMemProp.setValue(new Integer((int) Runtime.getRuntime().freeMemory() / 1024));
-            totalMemProp.setValue(new Integer((int) Runtime.getRuntime().totalMemory() / 1024));
+            freeMemProp.setValue((long) Runtime.getRuntime().freeMemory() / 1024);
+            totalMemProp.setValue((long) Runtime.getRuntime().totalMemory() / 1024);
         } catch (Exception e) {
             e.printStackTrace();
         }
