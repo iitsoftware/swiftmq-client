@@ -34,12 +34,7 @@ You need Apache Maven installed on your system. Then perform a
     
 which generates the `jar` file into the `target/` directory.
 
-## Community Support
-
-We use [Stackoverflow](https://www.stackoverflow.com) for the community support. If you have any questions or need
-help, post it there under tag `swiftmq`. 
-
-## Reporting Bugs
+## Community Support / Reporting Bugs
 
 Please use the [Issue Tracker](https://github.com/iitsoftware/swiftmq-client/issues) to file any bugs. 
 
