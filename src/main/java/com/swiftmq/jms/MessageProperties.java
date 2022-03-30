@@ -36,13 +36,17 @@ public class MessageProperties implements Enumeration {
 
     public void writeContent(DataOutput out)
             throws IOException {
-        out.writeInt(map.size());
-        for (Iterator iter = map.entrySet().iterator(); iter.hasNext(); ) {
-            Map.Entry entry = (Map.Entry) iter.next();
-            out.writeUTF((String) entry.getKey());
-            Dumpable d = (Dumpable) entry.getValue();
-            out.writeInt(d.getDumpId());
-            d.writeContent(out);
+        if (map == null)
+            out.writeInt(0);
+        else {
+            out.writeInt(map.size());
+            for (Iterator iter = map.entrySet().iterator(); iter.hasNext(); ) {
+                Map.Entry entry = (Map.Entry) iter.next();
+                out.writeUTF((String) entry.getKey());
+                Dumpable d = (Dumpable) entry.getValue();
+                out.writeInt(d.getDumpId());
+                d.writeContent(out);
+            }
         }
     }
 
@@ -331,13 +335,13 @@ public class MessageProperties implements Enumeration {
     }
 
     void remove(String name) {
-        if (map != null)
-            map.remove(name);
+        checkMap();
+        map.remove(name);
     }
 
     void clear() {
-        if (map != null)
-            map.clear();
+        checkMap();
+        map.clear();
     }
 
     Enumeration enumeration() {
