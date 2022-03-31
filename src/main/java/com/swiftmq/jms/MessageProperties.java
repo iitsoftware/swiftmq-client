@@ -30,23 +30,29 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.TreeMap;
 
-public class MessageProperties implements Enumeration<String> {
-    static ThreadLocal<Iterator<String>> iterHolder = new ThreadLocal<>();
-    Map<String, Dumpable> map = new TreeMap<>();
+public class MessageProperties implements Enumeration {
+    static ThreadLocal iterHolder = new ThreadLocal();
+    Map map = null;
 
     public void writeContent(DataOutput out)
             throws IOException {
-        out.writeInt(map.size());
-        for (Map.Entry<String, Dumpable> stringDumpableEntry : map.entrySet()) {
-            out.writeUTF(stringDumpableEntry.getKey());
-            Dumpable d = stringDumpableEntry.getValue();
-            out.writeInt(d.getDumpId());
-            d.writeContent(out);
+        if (map == null)
+            out.writeInt(0);
+        else {
+            out.writeInt(map.size());
+            for (Iterator iter = map.entrySet().iterator(); iter.hasNext(); ) {
+                Map.Entry entry = (Map.Entry) iter.next();
+                out.writeUTF((String) entry.getKey());
+                Dumpable d = (Dumpable) entry.getValue();
+                out.writeInt(d.getDumpId());
+                d.writeContent(out);
+            }
         }
     }
 
     public void readContent(DataInput in)
             throws IOException {
+        map = new TreeMap();
         int size = in.readInt();
         for (int i = 0; i < size; i++) {
             String name = in.readUTF();
@@ -60,7 +66,13 @@ public class MessageProperties implements Enumeration<String> {
         return (Dumpable) PrimitiveFactory.createInstance(dumpId);
     }
 
+    private synchronized void checkMap() {
+        if (map == null)
+            map = new TreeMap();
+    }
+
     void setBoolean(String name, boolean value) throws JMSException {
+        checkMap();
         // JMS 1.1
         if (name == null || name.length() == 0)
             throw new IllegalArgumentException("Name is null");
@@ -68,6 +80,7 @@ public class MessageProperties implements Enumeration<String> {
     }
 
     void setShort(String name, short value) throws JMSException {
+        checkMap();
         // JMS 1.1
         if (name == null || name.length() == 0)
             throw new IllegalArgumentException("Name is null");
@@ -75,6 +88,7 @@ public class MessageProperties implements Enumeration<String> {
     }
 
     void setInt(String name, int value) throws JMSException {
+        checkMap();
         // JMS 1.1
         if (name == null || name.length() == 0)
             throw new IllegalArgumentException("Name is null");
@@ -82,6 +96,7 @@ public class MessageProperties implements Enumeration<String> {
     }
 
     void setLong(String name, long value) throws JMSException {
+        checkMap();
         // JMS 1.1
         if (name == null || name.length() == 0)
             throw new IllegalArgumentException("Name is null");
@@ -89,6 +104,7 @@ public class MessageProperties implements Enumeration<String> {
     }
 
     void setDouble(String name, double value) throws JMSException {
+        checkMap();
         // JMS 1.1
         if (name == null || name.length() == 0)
             throw new IllegalArgumentException("Name is null");
@@ -96,6 +112,7 @@ public class MessageProperties implements Enumeration<String> {
     }
 
     void setFloat(String name, float value) throws JMSException {
+        checkMap();
         // JMS 1.1
         if (name == null || name.length() == 0)
             throw new IllegalArgumentException("Name is null");
@@ -103,6 +120,7 @@ public class MessageProperties implements Enumeration<String> {
     }
 
     void setChar(String name, char value) throws JMSException {
+        checkMap();
         // JMS 1.1
         if (name == null || name.length() == 0)
             throw new IllegalArgumentException("Name is null");
@@ -110,6 +128,7 @@ public class MessageProperties implements Enumeration<String> {
     }
 
     void setByte(String name, byte value) throws JMSException {
+        checkMap();
         // JMS 1.1
         if (name == null || name.length() == 0)
             throw new IllegalArgumentException("Name is null");
@@ -117,6 +136,7 @@ public class MessageProperties implements Enumeration<String> {
     }
 
     void setBytes(String name, byte[] value) throws JMSException {
+        checkMap();
         // JMS 1.1
         if (name == null || name.length() == 0)
             throw new IllegalArgumentException("Name is null");
@@ -124,6 +144,7 @@ public class MessageProperties implements Enumeration<String> {
     }
 
     void setBytes(String name, byte[] value, int offset, int length) throws JMSException {
+        checkMap();
         // JMS 1.1
         if (name == null || name.length() == 0)
             throw new IllegalArgumentException("Name is null");
@@ -131,6 +152,7 @@ public class MessageProperties implements Enumeration<String> {
     }
 
     void setString(String name, String value) throws JMSException {
+        checkMap();
         // JMS 1.1
         if (name == null || name.length() == 0)
             throw new IllegalArgumentException("Name is null");
@@ -142,21 +164,21 @@ public class MessageProperties implements Enumeration<String> {
         if (name == null || name.length() == 0)
             throw new IllegalArgumentException("Name is null");
         if (value instanceof Boolean)
-            setBoolean(name, (Boolean) value);
+            setBoolean(name, ((Boolean) value).booleanValue());
         else if (value instanceof Byte)
-            setByte(name, (Byte) value);
+            setByte(name, ((Byte) value).byteValue());
         else if (value instanceof Short)
-            setShort(name, (Short) value);
+            setShort(name, ((Short) value).shortValue());
         else if (value instanceof Integer)
-            setInt(name, (Integer) value);
+            setInt(name, ((Integer) value).intValue());
         else if (value instanceof Character)
-            setChar(name, (Character) value);
+            setChar(name, ((Character) value).charValue());
         else if (value instanceof Long)
-            setLong(name, (Long) value);
+            setLong(name, ((Long) value).longValue());
         else if (value instanceof Float)
-            setFloat(name, (Float) value);
+            setFloat(name, ((Float) value).floatValue());
         else if (value instanceof Double)
-            setDouble(name, (Double) value);
+            setDouble(name, ((Double) value).doubleValue());
         else if (value instanceof String)
             setString(name, (String) value);
         else if (value instanceof byte[] && withBytes)
@@ -167,6 +189,7 @@ public class MessageProperties implements Enumeration<String> {
     }
 
     private Object getValue(String name) {
+        checkMap();
         Primitive primitive = (Primitive) map.get(name);
         if (primitive != null)
             return primitive.getObject();
@@ -175,116 +198,126 @@ public class MessageProperties implements Enumeration<String> {
 
     boolean getBoolean(String name) throws JMSException {
         Object obj = getValue(name);
+
         if (obj == null)
-            throw new NullPointerException();
+            return Boolean.valueOf((String) obj).booleanValue();
         if (obj instanceof Boolean)
-            return (Boolean) obj;
+            return ((Boolean) obj).booleanValue();
         if (obj instanceof String)
-            return Boolean.parseBoolean((String) obj);
+            return Boolean.valueOf((String) obj).booleanValue();
 
         throw new MessageFormatException("can't convert message value to boolean");
     }
 
     byte getByte(String name) throws JMSException {
         Object obj = getValue(name);
+
         if (obj == null)
-            throw new NullPointerException();
+            return Byte.valueOf((String) obj).byteValue();
         if (obj instanceof Byte)
-            return (Byte) obj;
+            return ((Byte) obj).byteValue();
         if (obj instanceof String)
-            return Byte.parseByte((String) obj);
+            return Byte.valueOf((String) obj).byteValue();
         throw new MessageFormatException("can't convert message value to byte");
     }
 
     short getShort(String name) throws JMSException {
         Object obj = getValue(name);
+
         if (obj == null)
-            throw new NullPointerException();
+            return Short.valueOf((String) obj).shortValue();
         if (obj instanceof Byte)
-            return (Byte) obj;
+            return ((Byte) obj).byteValue();
         if (obj instanceof Short)
-            return (Short) obj;
+            return ((Short) obj).shortValue();
         if (obj instanceof String)
-            return Short.parseShort((String) obj);
+            return Short.valueOf((String) obj).shortValue();
         throw new MessageFormatException("can't convert property value to short");
     }
 
     char getChar(String name) throws JMSException {
         Object obj = getValue(name);
+
         if (obj == null)
             throw new NullPointerException();
         if (obj instanceof Character)
-            return (Character) obj;
+            return ((Character) obj).charValue();
         throw new MessageFormatException("can't convert message value to char");
     }
 
     int getInt(String name) throws JMSException {
         Object obj = getValue(name);
+
         if (obj == null)
-            throw new NullPointerException();
+            return Integer.valueOf((String) obj).intValue();
         if (obj instanceof Byte)
             return ((Byte) obj).intValue();
         if (obj instanceof Short)
             return ((Short) obj).intValue();
         if (obj instanceof Integer)
-            return (Integer) obj;
+            return ((Integer) obj).intValue();
         if (obj instanceof String)
-            return Integer.parseInt((String) obj);
+            return Integer.valueOf((String) obj).intValue();
         throw new MessageFormatException("can't convert message value to int");
     }
 
     long getLong(String name) throws JMSException {
         Object obj = getValue(name);
+
         if (obj == null)
-            throw new NullPointerException();
+            return Long.valueOf((String) obj).longValue();
         if (obj instanceof Byte)
             return ((Byte) obj).intValue();
         if (obj instanceof Short)
             return ((Short) obj).intValue();
         if (obj instanceof Integer)
-            return (Integer) obj;
+            return ((Integer) obj).intValue();
         if (obj instanceof Long)
-            return (Long) obj;
+            return ((Long) obj).longValue();
         if (obj instanceof String)
-            return Long.parseLong((String) obj);
+            return Long.valueOf((String) obj).longValue();
         throw new MessageFormatException("can't convert message value to long");
     }
 
     float getFloat(String name) throws JMSException {
         Object obj = getValue(name);
+
         if (obj == null)
-            throw new NullPointerException();
+            return Float.valueOf((String) obj).floatValue();
         if (obj instanceof Float)
-            return (Float) obj;
+            return ((Float) obj).floatValue();
         if (obj instanceof String)
-            return Float.parseFloat((String) obj);
+            return Float.valueOf((String) obj).floatValue();
         throw new MessageFormatException("can't convert message value to float");
     }
 
     double getDouble(String name) throws JMSException {
         Object obj = getValue(name);
+
         if (obj == null)
-            throw new NullPointerException();
+            return Double.valueOf((String) obj).doubleValue();
         if (obj instanceof Double)
-            return (Double) obj;
+            return ((Double) obj).doubleValue();
         if (obj instanceof Float)
-            return (Float) obj;
+            return ((Float) obj).floatValue();
         if (obj instanceof String)
-            return Double.parseDouble((String) obj);
+            return Double.valueOf((String) obj).doubleValue();
         throw new MessageFormatException("can't convert message value to double");
     }
 
     byte[] getBytes(String name) throws JMSException {
         Object obj = getValue(name);
+
         if (obj == null)
             return null;
         if (obj instanceof byte[])
-            return (byte[]) obj;
+            return ((byte[]) obj);
         throw new MessageFormatException("can't convert message value to byte[]");
     }
 
     String getString(String name) throws JMSException {
         Object obj = getValue(name);
+
         if (obj == null)
             return null;
         if (obj instanceof byte[])
@@ -297,35 +330,39 @@ public class MessageProperties implements Enumeration<String> {
     }
 
     boolean exists(String name) {
+        checkMap();
         return map.containsKey(name);
     }
 
     void remove(String name) {
+        checkMap();
         map.remove(name);
     }
 
     void clear() {
+        checkMap();
         map.clear();
     }
 
-    Enumeration<String> enumeration() {
+    Enumeration enumeration() {
+        checkMap();
         iterHolder.set(map.keySet().iterator());
         return this;
     }
 
     public boolean hasMoreElements() {
-        Iterator<String> iter = iterHolder.get();
+        Iterator iter = (Iterator) iterHolder.get();
         boolean b = iter.hasNext();
         if (!b)
             iterHolder.set(null);
         return b;
     }
 
-    public String nextElement() {
-        Iterator<String> iter = iterHolder.get();
+    public Object nextElement() {
+        Iterator iter = (Iterator) iterHolder.get();
         if (iter == null || !iter.hasNext())
             return null;
-        return iter.next();
+        return (String) iter.next();
     }
 
     public String toString() {
