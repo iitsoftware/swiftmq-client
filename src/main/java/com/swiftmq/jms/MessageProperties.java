@@ -32,27 +32,22 @@ import java.util.TreeMap;
 
 public class MessageProperties implements Enumeration {
     static ThreadLocal iterHolder = new ThreadLocal();
-    Map map = null;
+    Map map = new TreeMap();
 
     public void writeContent(DataOutput out)
             throws IOException {
-        if (map == null)
-            out.writeInt(0);
-        else {
-            out.writeInt(map.size());
-            for (Iterator iter = map.entrySet().iterator(); iter.hasNext(); ) {
-                Map.Entry entry = (Map.Entry) iter.next();
-                out.writeUTF((String) entry.getKey());
-                Dumpable d = (Dumpable) entry.getValue();
-                out.writeInt(d.getDumpId());
-                d.writeContent(out);
-            }
+        out.writeInt(map.size());
+        for (Iterator iter = map.entrySet().iterator(); iter.hasNext(); ) {
+            Map.Entry entry = (Map.Entry) iter.next();
+            out.writeUTF((String) entry.getKey());
+            Dumpable d = (Dumpable) entry.getValue();
+            out.writeInt(d.getDumpId());
+            d.writeContent(out);
         }
     }
 
     public void readContent(DataInput in)
             throws IOException {
-        map = new TreeMap();
         int size = in.readInt();
         for (int i = 0; i < size; i++) {
             String name = in.readUTF();
@@ -66,13 +61,7 @@ public class MessageProperties implements Enumeration {
         return (Dumpable) PrimitiveFactory.createInstance(dumpId);
     }
 
-    private synchronized void checkMap() {
-        if (map == null)
-            map = new TreeMap();
-    }
-
     void setBoolean(String name, boolean value) throws JMSException {
-        checkMap();
         // JMS 1.1
         if (name == null || name.length() == 0)
             throw new IllegalArgumentException("Name is null");
@@ -80,7 +69,6 @@ public class MessageProperties implements Enumeration {
     }
 
     void setShort(String name, short value) throws JMSException {
-        checkMap();
         // JMS 1.1
         if (name == null || name.length() == 0)
             throw new IllegalArgumentException("Name is null");
@@ -88,7 +76,6 @@ public class MessageProperties implements Enumeration {
     }
 
     void setInt(String name, int value) throws JMSException {
-        checkMap();
         // JMS 1.1
         if (name == null || name.length() == 0)
             throw new IllegalArgumentException("Name is null");
@@ -96,7 +83,6 @@ public class MessageProperties implements Enumeration {
     }
 
     void setLong(String name, long value) throws JMSException {
-        checkMap();
         // JMS 1.1
         if (name == null || name.length() == 0)
             throw new IllegalArgumentException("Name is null");
@@ -104,7 +90,6 @@ public class MessageProperties implements Enumeration {
     }
 
     void setDouble(String name, double value) throws JMSException {
-        checkMap();
         // JMS 1.1
         if (name == null || name.length() == 0)
             throw new IllegalArgumentException("Name is null");
@@ -112,7 +97,6 @@ public class MessageProperties implements Enumeration {
     }
 
     void setFloat(String name, float value) throws JMSException {
-        checkMap();
         // JMS 1.1
         if (name == null || name.length() == 0)
             throw new IllegalArgumentException("Name is null");
@@ -120,7 +104,6 @@ public class MessageProperties implements Enumeration {
     }
 
     void setChar(String name, char value) throws JMSException {
-        checkMap();
         // JMS 1.1
         if (name == null || name.length() == 0)
             throw new IllegalArgumentException("Name is null");
@@ -128,7 +111,6 @@ public class MessageProperties implements Enumeration {
     }
 
     void setByte(String name, byte value) throws JMSException {
-        checkMap();
         // JMS 1.1
         if (name == null || name.length() == 0)
             throw new IllegalArgumentException("Name is null");
@@ -136,7 +118,6 @@ public class MessageProperties implements Enumeration {
     }
 
     void setBytes(String name, byte[] value) throws JMSException {
-        checkMap();
         // JMS 1.1
         if (name == null || name.length() == 0)
             throw new IllegalArgumentException("Name is null");
@@ -144,7 +125,6 @@ public class MessageProperties implements Enumeration {
     }
 
     void setBytes(String name, byte[] value, int offset, int length) throws JMSException {
-        checkMap();
         // JMS 1.1
         if (name == null || name.length() == 0)
             throw new IllegalArgumentException("Name is null");
@@ -152,7 +132,6 @@ public class MessageProperties implements Enumeration {
     }
 
     void setString(String name, String value) throws JMSException {
-        checkMap();
         // JMS 1.1
         if (name == null || name.length() == 0)
             throw new IllegalArgumentException("Name is null");
@@ -189,7 +168,6 @@ public class MessageProperties implements Enumeration {
     }
 
     private Object getValue(String name) {
-        checkMap();
         Primitive primitive = (Primitive) map.get(name);
         if (primitive != null)
             return primitive.getObject();
@@ -330,22 +308,18 @@ public class MessageProperties implements Enumeration {
     }
 
     boolean exists(String name) {
-        checkMap();
         return map.containsKey(name);
     }
 
     void remove(String name) {
-        checkMap();
         map.remove(name);
     }
 
     void clear() {
-        checkMap();
         map.clear();
     }
 
     Enumeration enumeration() {
-        checkMap();
         iterHolder.set(map.keySet().iterator());
         return this;
     }
@@ -366,6 +340,6 @@ public class MessageProperties implements Enumeration {
     }
 
     public String toString() {
-        return map == null ? "none" : map.toString();
+        return map.toString();
     }
 }
