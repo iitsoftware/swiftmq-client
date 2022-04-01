@@ -135,21 +135,21 @@ public class MessageProperties implements Enumeration {
         // JMS 1.1
         checkName(name);
         if (value instanceof Boolean)
-            setBoolean(name, ((Boolean) value).booleanValue());
+            setBoolean(name, (Boolean) value);
         else if (value instanceof Byte)
-            setByte(name, ((Byte) value).byteValue());
+            setByte(name, (Byte) value);
         else if (value instanceof Short)
-            setShort(name, ((Short) value).shortValue());
+            setShort(name, (Short) value);
         else if (value instanceof Integer)
-            setInt(name, ((Integer) value).intValue());
+            setInt(name, (Integer) value);
         else if (value instanceof Character)
-            setChar(name, ((Character) value).charValue());
+            setChar(name, (Character) value);
         else if (value instanceof Long)
-            setLong(name, ((Long) value).longValue());
+            setLong(name, (Long) value);
         else if (value instanceof Float)
-            setFloat(name, ((Float) value).floatValue());
+            setFloat(name, (Float) value);
         else if (value instanceof Double)
-            setDouble(name, ((Double) value).doubleValue());
+            setDouble(name, (Double) value);
         else if (value instanceof String)
             setString(name, (String) value);
         else if (value instanceof byte[] && withBytes)
@@ -169,12 +169,10 @@ public class MessageProperties implements Enumeration {
     boolean getBoolean(String name) throws JMSException {
         Object obj = getValue(name);
 
-        if (obj == null)
-            return Boolean.valueOf((String) obj).booleanValue();
         if (obj instanceof Boolean)
-            return ((Boolean) obj).booleanValue();
+            return (Boolean) obj;
         if (obj instanceof String)
-            return Boolean.valueOf((String) obj).booleanValue();
+            return Boolean.parseBoolean((String) obj);
 
         throw new MessageFormatException("can't convert message value to boolean");
     }
@@ -182,96 +180,82 @@ public class MessageProperties implements Enumeration {
     byte getByte(String name) throws JMSException {
         Object obj = getValue(name);
 
-        if (obj == null)
-            return Byte.valueOf((String) obj).byteValue();
         if (obj instanceof Byte)
-            return ((Byte) obj).byteValue();
+            return (Byte) obj;
         if (obj instanceof String)
-            return Byte.valueOf((String) obj).byteValue();
+            return Byte.parseByte((String) obj);
         throw new MessageFormatException("can't convert message value to byte");
     }
 
     short getShort(String name) throws JMSException {
         Object obj = getValue(name);
 
-        if (obj == null)
-            return Short.valueOf((String) obj).shortValue();
         if (obj instanceof Byte)
-            return ((Byte) obj).byteValue();
+            return (Byte) obj;
         if (obj instanceof Short)
-            return ((Short) obj).shortValue();
+            return (Short) obj;
         if (obj instanceof String)
-            return Short.valueOf((String) obj).shortValue();
+            return Short.parseShort((String) obj);
         throw new MessageFormatException("can't convert property value to short");
     }
 
     char getChar(String name) throws JMSException {
         Object obj = getValue(name);
 
-        if (obj == null)
-            throw new NullPointerException();
         if (obj instanceof Character)
-            return ((Character) obj).charValue();
+            return (Character) obj;
         throw new MessageFormatException("can't convert message value to char");
     }
 
     int getInt(String name) throws JMSException {
         Object obj = getValue(name);
 
-        if (obj == null)
-            return Integer.valueOf((String) obj).intValue();
         if (obj instanceof Byte)
             return ((Byte) obj).intValue();
         if (obj instanceof Short)
             return ((Short) obj).intValue();
         if (obj instanceof Integer)
-            return ((Integer) obj).intValue();
+            return (Integer) obj;
         if (obj instanceof String)
-            return Integer.valueOf((String) obj).intValue();
+            return Integer.parseInt((String) obj);
         throw new MessageFormatException("can't convert message value to int");
     }
 
     long getLong(String name) throws JMSException {
         Object obj = getValue(name);
 
-        if (obj == null)
-            return Long.valueOf((String) obj).longValue();
         if (obj instanceof Byte)
             return ((Byte) obj).intValue();
         if (obj instanceof Short)
             return ((Short) obj).intValue();
         if (obj instanceof Integer)
-            return ((Integer) obj).intValue();
+            return (Integer) obj;
         if (obj instanceof Long)
-            return ((Long) obj).longValue();
+            return (Long) obj;
         if (obj instanceof String)
-            return Long.valueOf((String) obj).longValue();
+            return Long.parseLong((String) obj);
         throw new MessageFormatException("can't convert message value to long");
     }
 
     float getFloat(String name) throws JMSException {
         Object obj = getValue(name);
 
-        if (obj == null)
-            return Float.valueOf((String) obj).floatValue();
         if (obj instanceof Float)
-            return ((Float) obj).floatValue();
+            return (Float) obj;
         if (obj instanceof String)
-            return Float.valueOf((String) obj).floatValue();
+            return Float.parseFloat((String) obj);
         throw new MessageFormatException("can't convert message value to float");
     }
 
     double getDouble(String name) throws JMSException {
         Object obj = getValue(name);
 
-        if (obj == null)
-            return Double.valueOf((String) obj).doubleValue();
         if (obj instanceof Double)
-            return ((Double) obj).doubleValue();
+            return (Double) obj;
         if (obj instanceof Float)
-            return ((Float) obj).floatValue();
+            return (Float) obj;
         if (obj instanceof String)
-            return Double.valueOf((String) obj).doubleValue();
+            return Double.valueOf((String) obj);
         throw new MessageFormatException("can't convert message value to double");
     }
 
