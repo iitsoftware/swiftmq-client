@@ -32,15 +32,14 @@ import java.util.TreeMap;
 
 public class MessageProperties implements Enumeration {
     static ThreadLocal iterHolder = new ThreadLocal();
-    Map map = null;
+    Map<String, Dumpable> map = new TreeMap<>();
 
     public void writeContent(DataOutput out)
             throws IOException {
         out.writeInt(map.size());
-        for (Iterator iter = map.entrySet().iterator(); iter.hasNext(); ) {
-            Map.Entry entry = (Map.Entry) iter.next();
-            out.writeUTF((String) entry.getKey());
-            Dumpable d = (Dumpable) entry.getValue();
+        for (Map.Entry<String, Dumpable> stringDumpableEntry : map.entrySet()) {
+            out.writeUTF(stringDumpableEntry.getKey());
+            Dumpable d = stringDumpableEntry.getValue();
             out.writeInt(d.getDumpId());
             d.writeContent(out);
         }
@@ -48,7 +47,6 @@ public class MessageProperties implements Enumeration {
 
     public void readContent(DataInput in)
             throws IOException {
-        map = new TreeMap();
         int size = in.readInt();
         for (int i = 0; i < size; i++) {
             String name = in.readUTF();
@@ -58,107 +56,84 @@ public class MessageProperties implements Enumeration {
         }
     }
 
+    private void checkName(String name) throws IllegalArgumentException {
+        // JMS 1.1
+        if (name == null || name.length() == 0)
+            throw new IllegalArgumentException("Name is null");
+    }
+
     private Dumpable createDumpable(int dumpId) {
         return (Dumpable) PrimitiveFactory.createInstance(dumpId);
     }
 
-    private synchronized void checkMap() {
-        if (map == null)
-            map = new TreeMap();
-    }
-
     void setBoolean(String name, boolean value) throws JMSException {
-        checkMap();
         // JMS 1.1
-        if (name == null || name.length() == 0)
-            throw new IllegalArgumentException("Name is null");
+        checkName(name);
         map.put(name, new _Boolean(value));
     }
 
     void setShort(String name, short value) throws JMSException {
-        checkMap();
         // JMS 1.1
-        if (name == null || name.length() == 0)
-            throw new IllegalArgumentException("Name is null");
+        checkName(name);
         map.put(name, new _Short(value));
     }
 
     void setInt(String name, int value) throws JMSException {
-        checkMap();
         // JMS 1.1
-        if (name == null || name.length() == 0)
-            throw new IllegalArgumentException("Name is null");
+        checkName(name);
         map.put(name, new _Int(value));
     }
 
     void setLong(String name, long value) throws JMSException {
-        checkMap();
         // JMS 1.1
-        if (name == null || name.length() == 0)
-            throw new IllegalArgumentException("Name is null");
+        checkName(name);
         map.put(name, new _Long(value));
     }
 
     void setDouble(String name, double value) throws JMSException {
-        checkMap();
         // JMS 1.1
-        if (name == null || name.length() == 0)
-            throw new IllegalArgumentException("Name is null");
+        checkName(name);
         map.put(name, new _Double(value));
     }
 
     void setFloat(String name, float value) throws JMSException {
-        checkMap();
         // JMS 1.1
-        if (name == null || name.length() == 0)
-            throw new IllegalArgumentException("Name is null");
+        checkName(name);
         map.put(name, new _Float(value));
     }
 
     void setChar(String name, char value) throws JMSException {
-        checkMap();
         // JMS 1.1
-        if (name == null || name.length() == 0)
-            throw new IllegalArgumentException("Name is null");
+        checkName(name);
         map.put(name, new _Char(value));
     }
 
     void setByte(String name, byte value) throws JMSException {
-        checkMap();
-        // JMS 1.1
-        if (name == null || name.length() == 0)
-            throw new IllegalArgumentException("Name is null");
+        checkName(name);
         map.put(name, new _Byte(value));
     }
 
     void setBytes(String name, byte[] value) throws JMSException {
-        checkMap();
         // JMS 1.1
-        if (name == null || name.length() == 0)
-            throw new IllegalArgumentException("Name is null");
+        checkName(name);
         map.put(name, new _Bytes(value));
     }
 
     void setBytes(String name, byte[] value, int offset, int length) throws JMSException {
-        checkMap();
         // JMS 1.1
-        if (name == null || name.length() == 0)
-            throw new IllegalArgumentException("Name is null");
+        checkName(name);
         map.put(name, new _Bytes(value, offset, length));
     }
 
     void setString(String name, String value) throws JMSException {
-        checkMap();
         // JMS 1.1
-        if (name == null || name.length() == 0)
-            throw new IllegalArgumentException("Name is null");
+        checkName(name);
         map.put(name, new _String(value));
     }
 
     void setObject(String name, Object value, boolean withBytes) throws JMSException {
         // JMS 1.1
-        if (name == null || name.length() == 0)
-            throw new IllegalArgumentException("Name is null");
+        checkName(name);
         if (value instanceof Boolean)
             setBoolean(name, ((Boolean) value).booleanValue());
         else if (value instanceof Byte)
@@ -185,7 +160,6 @@ public class MessageProperties implements Enumeration {
     }
 
     private Object getValue(String name) {
-        checkMap();
         Primitive primitive = (Primitive) map.get(name);
         if (primitive != null)
             return primitive.getObject();
@@ -326,22 +300,18 @@ public class MessageProperties implements Enumeration {
     }
 
     boolean exists(String name) {
-        checkMap();
         return map.containsKey(name);
     }
 
     void remove(String name) {
-        if (map != null)
-            map.remove(name);
+        map.remove(name);
     }
 
     void clear() {
-        if (map != null)
-            map.clear();
+        map.clear();
     }
 
     Enumeration enumeration() {
-        checkMap();
         iterHolder.set(map.keySet().iterator());
         return this;
     }
@@ -362,6 +332,6 @@ public class MessageProperties implements Enumeration {
     }
 
     public String toString() {
-        return map == null ? "none" : map.toString();
+        return map.toString();
     }
 }

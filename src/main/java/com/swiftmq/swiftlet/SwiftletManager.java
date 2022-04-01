@@ -714,6 +714,7 @@ public class SwiftletManager {
         startup = false;
         if (doFireKernelStartedEvent)
             fireKernelStartedEvent();
+        logSwiftlet.logInformation("SwiftletManager", "networkaddress.cache.ttl=" + java.security.Security.getProperty("networkaddress.cache.ttl"));
         System.out.println("SwiftMQ " + Version.getKernelVersion() + " " + "[" + getRouterName() + "] is ready.");
     }
 
