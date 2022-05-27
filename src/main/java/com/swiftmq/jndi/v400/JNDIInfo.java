@@ -25,6 +25,7 @@ public class JNDIInfo implements java.io.Serializable {
     String factory;
     long timeout;
     long keepalive;
+    long idleclose;
     boolean intraVM = false;
     boolean reconnect = false;
     long reconnectDelay = 0;
@@ -34,11 +35,7 @@ public class JNDIInfo implements java.io.Serializable {
     boolean debug = false;
     boolean hasParameters = false;
 
-    protected JNDIInfo(String username, String password, String hostname, int port, String factory, long timeout, boolean intraVM) {
-        this(username, password, hostname, port, factory, timeout, 0, intraVM);
-    }
-
-    protected JNDIInfo(String username, String password, String hostname, int port, String factory, long timeout, long keepalive, boolean intraVM) {
+    protected JNDIInfo(String username, String password, String hostname, int port, String factory, long timeout, long keepalive, long idleclose, boolean intraVM, boolean reconnect, long reconnectDelay, int maxRetries, String hostname2, int port2, boolean debug, boolean hasParameters) {
         this.username = username;
         this.password = password;
         this.hostname = hostname;
@@ -46,17 +43,7 @@ public class JNDIInfo implements java.io.Serializable {
         this.factory = factory;
         this.timeout = timeout;
         this.keepalive = keepalive;
-        this.intraVM = intraVM;
-    }
-
-    protected JNDIInfo(String username, String password, String hostname, int port, String factory, long timeout, long keepalive, boolean intraVM, boolean reconnect, long reconnectDelay, int maxRetries, String hostname2, int port2, boolean debug, boolean hasParameters) {
-        this.username = username;
-        this.password = password;
-        this.hostname = hostname;
-        this.port = port;
-        this.factory = factory;
-        this.timeout = timeout;
-        this.keepalive = keepalive;
+        this.idleclose = idleclose;
         this.intraVM = intraVM;
         this.reconnect = reconnect;
         this.reconnectDelay = reconnectDelay;
@@ -93,6 +80,10 @@ public class JNDIInfo implements java.io.Serializable {
 
     public long getKeepalive() {
         return keepalive;
+    }
+
+    public long getIdleclose() {
+        return idleclose;
     }
 
     public boolean isIntraVM() {
@@ -161,6 +152,12 @@ public class JNDIInfo implements java.io.Serializable {
                     b.append(keepalive);
                     semiRequired = true;
                 }
+                if (idleclose != 0) {
+                    if (semiRequired)
+                        b.append(";");
+                    b.append("idleclose=");
+                    b.append(idleclose);
+                }
             }
         }
         return b.toString();
@@ -182,6 +179,8 @@ public class JNDIInfo implements java.io.Serializable {
         s.append(timeout);
         s.append(", keepalive=");
         s.append(keepalive);
+        s.append(", idleclose=");
+        s.append(idleclose);
         s.append(", intraVM=");
         s.append(intraVM);
         s.append(", reconnect=");

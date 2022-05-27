@@ -21,7 +21,7 @@ import javax.naming.NamingException;
 import java.util.StringTokenizer;
 
 // Parser for SMQP-URLs:
-// "smqp://[<user>[:<passwd>]@](<host>:<port>)|"intravm"[/[type=<type>][;timeout=<ms>][;keepalive=<ms>]
+// "smqp://[<user>[:<passwd>]@](<host>:<port>)|"intravm"[/[type=<type>][;timeout=<ms>][;keepalive=<ms>][;idleclose=<ms>]
 //           [;reconnect=<boolean>][;retrydelay=<ms>][;maxretries=<int>][;host2=<host>][;port2=<port>][;debug=<boolean>]]"
 
 public class URLParser implements java.io.Serializable {
@@ -29,6 +29,7 @@ public class URLParser implements java.io.Serializable {
     private static final String INTRAVM = "intravm";
     private static final long DEFAULT_TIMEOUT = 0;
     private static final long DEFAULT_KEEPALIVE = 60000;
+    private static final long DEFAULT_IDLECLOSE = 60000;
 
     private static String[] getPars(String url) {
         StringTokenizer t = new StringTokenizer(url, ";");
@@ -55,7 +56,6 @@ public class URLParser implements java.io.Serializable {
 
     public static JNDIInfo parseURL(String ref)
             throws NamingException {
-        JNDIInfo jndiInfo = null;
         if (!ref.startsWith("smqp://"))
             throw new NamingException("invalid URL: protocol != smqp, URL=" + ref);
         String s = ref.substring(7);
@@ -77,8 +77,9 @@ public class URLParser implements java.io.Serializable {
         String factory = DEFAULT_FACTORY;
         long timeout = DEFAULT_TIMEOUT;
         long keepalive = DEFAULT_KEEPALIVE;
-        String hostname = null;
-        String sport = null;
+        long idleclose = DEFAULT_IDLECLOSE;
+        String hostname;
+        String sport;
         int port = 0;
         boolean reconnect = false;
         long retrydelay = 0;
@@ -104,69 +105,86 @@ public class URLParser implements java.io.Serializable {
                 hostname = s;
             else
                 hostname = s.substring(0, s.indexOf('/'));
-            if (!hostname.toLowerCase().equals(INTRAVM))
+            if (!hostname.equalsIgnoreCase(INTRAVM))
                 throw new NamingException("Expected '" + INTRAVM + "' but got '" + hostname + "'");
         }
         if (s.indexOf('/') != -1) {
             String[] pars = getPars(s.substring(s.indexOf('/') + 1));
             hasParameters = pars.length > 0;
-            for (int i = 0; i < pars.length; i++) {
-                String name = getName(pars[i]);
-                String value = getValue(pars[i]);
-                if (name.equals("type")) {
-                    factory = value;
-                } else if (name.equals("timeout")) {
-                    try {
-                        timeout = Long.parseLong(value);
-                        if (timeout < 0)
-                            throw new NamingException("timeout < 0: " + pars[i]);
-                    } catch (NumberFormatException nfe) {
-                        throw new NamingException("invalid long value: " + pars[i]);
-                    }
-                } else if (name.equals("keepalive")) {
-                    try {
-                        keepalive = Long.parseLong(value);
-                        if (keepalive < 0)
-                            throw new NamingException("keepalive < 0: " + pars[i]);
-                    } catch (NumberFormatException nfe) {
-                        throw new NamingException("invalid long value: " + pars[i]);
-                    }
-                } else if (name.equals("reconnect")) {
-                    reconnect = Boolean.valueOf(value).booleanValue();
-                } else if (name.equals("retrydelay")) {
-                    try {
-                        retrydelay = Long.parseLong(value);
-                        if (retrydelay < 0)
-                            throw new NamingException("retrydelay < 0: " + pars[i]);
-                    } catch (NumberFormatException nfe) {
-                        throw new NamingException("invalid long value: " + pars[i]);
-                    }
-                } else if (name.equals("maxretries")) {
-                    try {
-                        maxretries = Integer.parseInt(value);
-                        if (maxretries < 0)
-                            throw new NamingException("maxretries < 0: " + pars[i]);
-                    } catch (NumberFormatException nfe) {
-                        throw new NamingException("invalid long value: " + pars[i]);
-                    }
-                } else if (name.equals("host2")) {
-                    host2 = value == null ? hostname : value;
-                } else if (name.equals("port2")) {
-                    try {
-                        port2 = Integer.parseInt(value);
-                        if (port2 < 0)
-                            throw new NamingException("port2 < 0: " + pars[i]);
-                    } catch (NumberFormatException nfe) {
-                        throw new NamingException("invalid long value: " + pars[i]);
-                    }
-                } else if (name.equals("debug")) {
-                    debug = Boolean.valueOf(value).booleanValue();
-                } else
-                    throw new NamingException("invalid parameter: " + pars[i]);
+            for (String par : pars) {
+                String name = getName(par);
+                String value = getValue(par);
+                switch (name) {
+                    case "type":
+                        factory = value;
+                        break;
+                    case "timeout":
+                        try {
+                            timeout = Long.parseLong(value);
+                            if (timeout < 0)
+                                throw new NamingException("timeout < 0: " + par);
+                        } catch (NumberFormatException nfe) {
+                            throw new NamingException("invalid long value: " + par);
+                        }
+                        break;
+                    case "keepalive":
+                        try {
+                            keepalive = Long.parseLong(value);
+                            if (keepalive < 0)
+                                throw new NamingException("keepalive < 0: " + par);
+                        } catch (NumberFormatException nfe) {
+                            throw new NamingException("invalid long value: " + par);
+                        }
+                        break;
+                    case "idleclose":
+                        try {
+                            idleclose = Long.parseLong(value);
+                        } catch (NumberFormatException nfe) {
+                            throw new NamingException("invalid long value: " + par);
+                        }
+                        break;
+                    case "reconnect":
+                        reconnect = Boolean.parseBoolean(value);
+                        break;
+                    case "retrydelay":
+                        try {
+                            retrydelay = Long.parseLong(value);
+                            if (retrydelay < 0)
+                                throw new NamingException("retrydelay < 0: " + par);
+                        } catch (NumberFormatException nfe) {
+                            throw new NamingException("invalid long value: " + par);
+                        }
+                        break;
+                    case "maxretries":
+                        try {
+                            maxretries = Integer.parseInt(value);
+                            if (maxretries < 0)
+                                throw new NamingException("maxretries < 0: " + par);
+                        } catch (NumberFormatException nfe) {
+                            throw new NamingException("invalid long value: " + par);
+                        }
+                        break;
+                    case "host2":
+                        host2 = value;
+                        break;
+                    case "port2":
+                        try {
+                            port2 = Integer.parseInt(value);
+                            if (port2 < 0)
+                                throw new NamingException("port2 < 0: " + par);
+                        } catch (NumberFormatException nfe) {
+                            throw new NamingException("invalid long value: " + par);
+                        }
+                        break;
+                    case "debug":
+                        debug = Boolean.parseBoolean(value);
+                        break;
+                    default:
+                        throw new NamingException("invalid parameter: " + par);
+                }
             }
         }
-        jndiInfo = new JNDIInfo(username, password, hostname, port, factory, timeout, keepalive, hostname.equals(INTRAVM), reconnect, retrydelay, maxretries, host2, port2, debug, hasParameters);
-        return jndiInfo;
+        return new JNDIInfo(username, password, hostname, port, factory, timeout, keepalive, idleclose, hostname.equals(INTRAVM), reconnect, retrydelay, maxretries, host2, port2, debug, hasParameters);
     }
 }
 
