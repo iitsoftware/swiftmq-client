@@ -21,6 +21,7 @@ import com.swiftmq.filetransfer.protocol.MessageBasedReply;
 import com.swiftmq.jms.TextMessageImpl;
 import com.thoughtworks.xstream.XStream;
 import com.thoughtworks.xstream.io.xml.Dom4JDriver;
+import com.thoughtworks.xstream.security.AnyTypePermission;
 
 import javax.jms.JMSException;
 import javax.jms.Message;
@@ -44,6 +45,8 @@ public class FileQueryPropsReply extends MessageBasedReply {
         String s = message.getText();
         if (s != null) {
             XStream xStream = new XStream(new Dom4JDriver());
+            xStream.addPermission(AnyTypePermission.ANY);
+            xStream.allowTypesByWildcard(new String[]{".*"});
             StringReader reader = new StringReader(s);
             result = (Map<String, Map<String, Object>>) xStream.fromXML(reader);
         }

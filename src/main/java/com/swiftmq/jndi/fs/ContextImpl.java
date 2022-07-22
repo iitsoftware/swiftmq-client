@@ -19,6 +19,7 @@ package com.swiftmq.jndi.fs;
 
 import com.thoughtworks.xstream.XStream;
 import com.thoughtworks.xstream.io.xml.Dom4JDriver;
+import com.thoughtworks.xstream.security.AnyTypePermission;
 
 import javax.naming.*;
 import java.io.*;
@@ -31,6 +32,8 @@ public class ContextImpl implements Context, java.io.Serializable, NameParser {
     ContextImpl(File contextDir) {
         this.contextDir = contextDir;
         xStream = new XStream(new Dom4JDriver());
+        xStream.addPermission(AnyTypePermission.ANY);
+        xStream.allowTypesByWildcard(new String[]{".*"});
     }
 
     public Name parse(String s) throws NamingException {
