@@ -65,6 +65,7 @@ public class SwiftletDeployer implements DeployListener {
         SwiftletManager.getInstance().addSwiftletManagerListener(SwiftletManager.getInstance().getLastSwiftlet(), new SwiftletManagerAdapter() {
             public void swiftletStarted(SwiftletManagerEvent evt) {
                 start();
+                SwiftletManager.getInstance().saveConfigIfDirty();
             }
         });
         if (traceSpace.enabled) traceSpace.trace("SwiftletManager", toString() + "/created");
