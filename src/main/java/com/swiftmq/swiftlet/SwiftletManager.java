@@ -45,6 +45,9 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * The SwiftletManager is the single instance of a SwiftMQ router that is
@@ -122,6 +125,8 @@ public class SwiftletManager {
     boolean quietMode = false;
     boolean strippedMode = false;
     boolean doFireKernelStartedEvent = true;
+    AtomicBoolean configDirty = new AtomicBoolean(false);
+    Lock saveLock = new ReentrantLock();
     PrintStream savedSystemOut = System.out;
 
     Thread shutdownHook = null;
@@ -352,6 +357,18 @@ public class SwiftletManager {
 
     public void setStrippedMode(boolean strippedMode) {
         this.strippedMode = strippedMode;
+    }
+
+    public void setConfigDirty(boolean configDirty) {
+        this.configDirty.set(configDirty);
+    }
+
+    public void saveConfigIfDirty() {
+        if (configDirty.get()) {
+            logSwiftlet.logInformation("SwiftletManager", "Configuration was updated, saving ...");
+            saveConfiguration();
+            configDirty.set(false);
+        }
     }
 
     /**
@@ -897,7 +914,12 @@ public class SwiftletManager {
      * Saves this router's configuration.
      */
     public void saveConfiguration() {
-        saveConfiguration(RouterConfiguration.Singleton());
+        saveLock.lock();
+        try {
+            saveConfiguration(RouterConfiguration.Singleton());
+        } finally {
+            saveLock.unlock();
+        }
     }
 
     protected Element[] getOptionalElements() {
