@@ -251,6 +251,8 @@ public class SwiftletManager {
             for (String kernelSwiftletName : kernelSwiftletNames) {
                 actSwiftletName = kernelSwiftletName;
                 startKernelSwiftlet(actSwiftletName, swiftletTable);
+                if (kernelSwiftletName.equals("sys$log"))
+                    logSwiftlet = (LogSwiftlet) getSwiftlet("sys$log");
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -258,7 +260,6 @@ public class SwiftletManager {
             System.err.println("Exception during startup kernel swiftlet '" + actSwiftletName + "': " + e.getMessage());
             System.exit(-1);
         }
-        logSwiftlet = (LogSwiftlet) getSwiftlet("sys$log");
         trace("Kernel swiftlets started");
     }
 
