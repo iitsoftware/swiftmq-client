@@ -368,8 +368,12 @@ public class SwiftletManager {
         if (configDirty.get()) {
             logSwiftlet.logInformation("SwiftletManager", "Configuration was updated, saving ...");
             saveConfiguration();
-            configDirty.set(false);
         }
+    }
+
+    public String getLastSwiftlet() {
+        Object[] arr = swiftletTable.keySet().toArray();
+        return (String) arr[arr.length - 1];
     }
 
     /**
@@ -886,6 +890,7 @@ public class SwiftletManager {
     public synchronized void shutdown() {
         System.out.println("Shutdown SwiftMQ " + Version.getKernelVersion() + " " + "[" + getRouterName() + "] ...");
         trace("shutdown");
+        saveConfigIfDirty();
         if (configfileWatchdog != null)
             timerSwiftlet.removeTimerListener(configfileWatchdog);
         memoryMeter.close();
@@ -918,6 +923,7 @@ public class SwiftletManager {
         saveLock.lock();
         try {
             saveConfiguration(RouterConfiguration.Singleton());
+            configDirty.set(false);
         } finally {
             saveLock.unlock();
         }
