@@ -244,9 +244,6 @@ public class SwiftletManager {
             trace("Trace swiftlet '" + actSwiftletName + " has been started");
             trace("Starting kernel swiftlets");
 
-            // Create Extension Swiftlet Deployer
-            new SwiftletDeployer();
-
             // Next: start the other kernel swiftlets
             for (String kernelSwiftletName : kernelSwiftletNames) {
                 actSwiftletName = kernelSwiftletName;
@@ -254,6 +251,9 @@ public class SwiftletManager {
                 if (kernelSwiftletName.equals("sys$log"))
                     logSwiftlet = (LogSwiftlet) getSwiftlet("sys$log");
             }
+
+            // Create Extension Swiftlet Deployer
+            new SwiftletDeployer().start();
         } catch (Exception e) {
             e.printStackTrace();
             trace("Kernel swiftlet: '" + actSwiftletName + "', exception during startup: " + e.getMessage());
