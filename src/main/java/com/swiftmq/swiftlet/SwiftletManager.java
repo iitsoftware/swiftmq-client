@@ -416,7 +416,7 @@ public class SwiftletManager {
             Swiftlet swiftlet = (Swiftlet) swiftletTable.get(name);
             if (swiftlet != null)
                 shutdownSwiftlet(swiftlet);
-//            RouterConfiguration.Singleton().removeEntity(RouterConfiguration.Singleton().getEntity(name));
+            RouterConfiguration.Singleton().removeEntity(RouterConfiguration.Singleton().getEntity(name));
         } catch (Exception ignored) {
         }
         bundleTable.remove(name);
@@ -968,8 +968,10 @@ public class SwiftletManager {
             Map configs = entity.getEntities();
             for (Object o : configs.keySet()) {
                 Entity c = (Entity) configs.get((String) o);
-                if (c instanceof Configuration)
+                if (c instanceof Configuration) {
+                    trace("Save Config: " + c.getName());
                     XMLUtilities.configToXML((Configuration) c, root);
+                }
             }
             XMLUtilities.writeDocument(doc, configFilename);
             routerConfig = doc;
