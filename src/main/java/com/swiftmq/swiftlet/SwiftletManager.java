@@ -969,12 +969,11 @@ public class SwiftletManager {
             for (Object o : configs.keySet()) {
                 Entity c = (Entity) configs.get((String) o);
                 if (c instanceof Configuration) {
-                    trace("Save Config: " + c.getName());
                     XMLUtilities.configToXML((Configuration) c, root);
                 }
             }
             XMLUtilities.writeDocument(doc, configFilename);
-            routerConfig = doc;
+//            routerConfig = doc;
             al.add("Configuration saved to file '" + configFilename + "'.");
         } catch (Exception e) {
             al.add("Error saving configuration: " + e);
