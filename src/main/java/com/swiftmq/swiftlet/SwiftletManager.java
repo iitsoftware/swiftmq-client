@@ -416,7 +416,7 @@ public class SwiftletManager {
             Swiftlet swiftlet = (Swiftlet) swiftletTable.get(name);
             if (swiftlet != null)
                 shutdownSwiftlet(swiftlet);
-            RouterConfiguration.Singleton().removeEntity(RouterConfiguration.Singleton().getEntity(name));
+//            RouterConfiguration.Singleton().removeEntity(RouterConfiguration.Singleton().getEntity(name));
         } catch (Exception ignored) {
         }
         bundleTable.remove(name);
