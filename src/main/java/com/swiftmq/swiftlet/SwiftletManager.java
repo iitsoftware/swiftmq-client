@@ -254,6 +254,7 @@ public class SwiftletManager {
 
             // Create Extension Swiftlet Deployer
             new SwiftletDeployer().start();
+            saveConfigIfDirty();
         } catch (Exception e) {
             e.printStackTrace();
             trace("Kernel swiftlet: '" + actSwiftletName + "', exception during startup: " + e.getMessage());
