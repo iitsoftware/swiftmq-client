@@ -973,7 +973,6 @@ public class SwiftletManager {
                 }
             }
             XMLUtilities.writeDocument(doc, configFilename);
-//            routerConfig = doc;
             al.add("Configuration saved to file '" + configFilename + "'.");
         } catch (Exception e) {
             al.add("Error saving configuration: " + e);
