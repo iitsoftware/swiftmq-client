@@ -264,7 +264,8 @@ public class SwiftletManager {
             }
 
             // Create Extension Swiftlet Deployer
-            startSwiftletDeployer();
+            if (!isHA())
+                startSwiftletDeployer();
             saveConfigIfDirty();
         } catch (Exception e) {
             e.printStackTrace();
