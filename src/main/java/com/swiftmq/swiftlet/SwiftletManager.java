@@ -160,13 +160,10 @@ public class SwiftletManager {
     }
 
     protected void startSwiftletDeployer() {
-        swiftletDeployer = new SwiftletDeployer();
-        swiftletDeployer.start();
-    }
-
-    protected void stopSwiftletDeployet() {
-        if (swiftletDeployer != null)
-            swiftletDeployer.stop();
+        if (swiftletDeployer == null) {
+            swiftletDeployer = new SwiftletDeployer();
+            swiftletDeployer.start();
+        }
     }
 
     protected Configuration getConfiguration(Swiftlet swiftlet) throws Exception {
@@ -305,7 +302,6 @@ public class SwiftletManager {
     protected void stopKernelSwiftlets() {
         trace("stopKernelSwiftlets");
         logSwiftlet.logInformation("SwiftletManager", "stopKernelSwiftlets");
-        stopSwiftletDeployet();
         List al = new ArrayList();
         synchronized (sSemaphore) {
             for (int i = kernelSwiftletNames.length - 1; i >= 0; i--) {
