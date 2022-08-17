@@ -106,6 +106,7 @@ public class SwiftletManager {
     Set kernelListeners = new HashSet();
     Map surviveMap = Collections.synchronizedMap(new HashMap());
     RouterMemoryMeter memoryMeter = null;
+    SwiftletDeployer swiftletDeployer = null;
 
     LogSwiftlet logSwiftlet = null;
     TraceSwiftlet traceSwiftlet = null;
@@ -156,6 +157,16 @@ public class SwiftletManager {
     protected void trace(String message) {
         if (!quietMode && traceSpace != null && traceSpace.enabled)
             traceSpace.trace("SwiftletManager", message);
+    }
+
+    protected void startSwiftletDeployer() {
+        swiftletDeployer = new SwiftletDeployer();
+        swiftletDeployer.start();
+    }
+
+    protected void stopSwiftletDeployet() {
+        if (swiftletDeployer != null)
+            swiftletDeployer.stop();
     }
 
     protected Configuration getConfiguration(Swiftlet swiftlet) throws Exception {
@@ -253,7 +264,7 @@ public class SwiftletManager {
             }
 
             // Create Extension Swiftlet Deployer
-            new SwiftletDeployer().start();
+            startSwiftletDeployer();
             saveConfigIfDirty();
         } catch (Exception e) {
             e.printStackTrace();
@@ -293,6 +304,7 @@ public class SwiftletManager {
     protected void stopKernelSwiftlets() {
         trace("stopKernelSwiftlets");
         logSwiftlet.logInformation("SwiftletManager", "stopKernelSwiftlets");
+        stopSwiftletDeployet();
         List al = new ArrayList();
         synchronized (sSemaphore) {
             for (int i = kernelSwiftletNames.length - 1; i >= 0; i--) {

@@ -90,6 +90,13 @@ public class SwiftletDeployer implements DeployListener {
         if (traceSpace.enabled) traceSpace.trace("SwiftletManager", toString() + "/start done");
     }
 
+    public void stop() {
+        if (traceSpace.enabled) traceSpace.trace("SwiftletManager", toString() + "/stop ...");
+        if (deploySpace != null)
+            deploySpace.setDeployListener(null);
+        if (traceSpace.enabled) traceSpace.trace("SwiftletManager", toString() + "/stop ...");
+    }
+
     private int executeCLICommands(Bundle bundle, CLIExecutor cliexec, String phase, boolean old) throws Exception {
         if (traceSpace.enabled)
             traceSpace.trace("SwiftletManager", toString() + "/executeCLICommands, bundle=" + bundle.getBundleName() + ", phase=" + phase + " ...");
