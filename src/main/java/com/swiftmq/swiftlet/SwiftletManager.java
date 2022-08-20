@@ -45,6 +45,9 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * The SwiftletManager is the single instance of a SwiftMQ router that is
@@ -103,6 +106,7 @@ public class SwiftletManager {
     Set kernelListeners = new HashSet();
     Map surviveMap = Collections.synchronizedMap(new HashMap());
     RouterMemoryMeter memoryMeter = null;
+    SwiftletDeployer swiftletDeployer = null;
 
     LogSwiftlet logSwiftlet = null;
     TraceSwiftlet traceSwiftlet = null;
@@ -122,6 +126,8 @@ public class SwiftletManager {
     boolean quietMode = false;
     boolean strippedMode = false;
     boolean doFireKernelStartedEvent = true;
+    AtomicBoolean configDirty = new AtomicBoolean(false);
+    Lock saveLock = new ReentrantLock();
     PrintStream savedSystemOut = System.out;
 
     Thread shutdownHook = null;
@@ -151,6 +157,16 @@ public class SwiftletManager {
     protected void trace(String message) {
         if (!quietMode && traceSpace != null && traceSpace.enabled)
             traceSpace.trace("SwiftletManager", message);
+    }
+
+    protected void startSwiftletDeployer() {
+        swiftletDeployer = new SwiftletDeployer();
+        swiftletDeployer.start();
+    }
+
+    protected void stopSwiftletDeployer() {
+        if (swiftletDeployer != null)
+            swiftletDeployer.stop();
     }
 
     protected Configuration getConfiguration(Swiftlet swiftlet) throws Exception {
@@ -239,21 +255,24 @@ public class SwiftletManager {
             trace("Trace swiftlet '" + actSwiftletName + " has been started");
             trace("Starting kernel swiftlets");
 
-            // Create Extension Swiftlet Deployer
-            new SwiftletDeployer();
-
             // Next: start the other kernel swiftlets
             for (String kernelSwiftletName : kernelSwiftletNames) {
                 actSwiftletName = kernelSwiftletName;
                 startKernelSwiftlet(actSwiftletName, swiftletTable);
+                if (kernelSwiftletName.equals("sys$log"))
+                    logSwiftlet = (LogSwiftlet) getSwiftlet("sys$log");
             }
+
+            // Create Extension Swiftlet Deployer
+            if (!isHA())
+                startSwiftletDeployer();
+            saveConfigIfDirty();
         } catch (Exception e) {
             e.printStackTrace();
             trace("Kernel swiftlet: '" + actSwiftletName + "', exception during startup: " + e.getMessage());
             System.err.println("Exception during startup kernel swiftlet '" + actSwiftletName + "': " + e.getMessage());
             System.exit(-1);
         }
-        logSwiftlet = (LogSwiftlet) getSwiftlet("sys$log");
         trace("Kernel swiftlets started");
     }
 
@@ -286,6 +305,7 @@ public class SwiftletManager {
     protected void stopKernelSwiftlets() {
         trace("stopKernelSwiftlets");
         logSwiftlet.logInformation("SwiftletManager", "stopKernelSwiftlets");
+        stopSwiftletDeployer();
         List al = new ArrayList();
         synchronized (sSemaphore) {
             for (int i = kernelSwiftletNames.length - 1; i >= 0; i--) {
@@ -352,6 +372,22 @@ public class SwiftletManager {
 
     public void setStrippedMode(boolean strippedMode) {
         this.strippedMode = strippedMode;
+    }
+
+    public void setConfigDirty(boolean configDirty) {
+        this.configDirty.set(configDirty);
+    }
+
+    public void saveConfigIfDirty() {
+        if (configDirty.get()) {
+            logSwiftlet.logInformation("SwiftletManager", "Configuration was updated, saving ...");
+            saveConfiguration();
+        }
+    }
+
+    public String getLastSwiftlet() {
+        Object[] arr = swiftletTable.keySet().toArray();
+        return (String) arr[arr.length - 1];
     }
 
     /**
@@ -868,6 +904,7 @@ public class SwiftletManager {
     public synchronized void shutdown() {
         System.out.println("Shutdown SwiftMQ " + Version.getKernelVersion() + " " + "[" + getRouterName() + "] ...");
         trace("shutdown");
+        saveConfigIfDirty();
         if (configfileWatchdog != null)
             timerSwiftlet.removeTimerListener(configfileWatchdog);
         memoryMeter.close();
@@ -897,7 +934,13 @@ public class SwiftletManager {
      * Saves this router's configuration.
      */
     public void saveConfiguration() {
-        saveConfiguration(RouterConfiguration.Singleton());
+        saveLock.lock();
+        try {
+            saveConfiguration(RouterConfiguration.Singleton());
+            configDirty.set(false);
+        } finally {
+            saveLock.unlock();
+        }
     }
 
     protected Element[] getOptionalElements() {
@@ -938,11 +981,11 @@ public class SwiftletManager {
             Map configs = entity.getEntities();
             for (Object o : configs.keySet()) {
                 Entity c = (Entity) configs.get((String) o);
-                if (c instanceof Configuration)
+                if (c instanceof Configuration) {
                     XMLUtilities.configToXML((Configuration) c, root);
+                }
             }
             XMLUtilities.writeDocument(doc, configFilename);
-            routerConfig = doc;
             al.add("Configuration saved to file '" + configFilename + "'.");
         } catch (Exception e) {
             al.add("Error saving configuration: " + e);

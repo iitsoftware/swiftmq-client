@@ -21,8 +21,6 @@ import com.swiftmq.mgmt.XMLUtilities;
 import com.swiftmq.swiftlet.deploy.DeploySpace;
 import com.swiftmq.swiftlet.deploy.DeploySwiftlet;
 import com.swiftmq.swiftlet.deploy.event.DeployListener;
-import com.swiftmq.swiftlet.event.SwiftletManagerAdapter;
-import com.swiftmq.swiftlet.event.SwiftletManagerEvent;
 import com.swiftmq.swiftlet.log.LogSwiftlet;
 import com.swiftmq.swiftlet.mgmt.CLIExecutor;
 import com.swiftmq.swiftlet.mgmt.MgmtSwiftlet;
@@ -46,27 +44,10 @@ public class SwiftletDeployer implements DeployListener {
     SwiftletDeployer() {
         traceSwiftlet = (TraceSwiftlet) SwiftletManager.getInstance().getSwiftlet("sys$trace");
         traceSpace = traceSwiftlet.getTraceSpace(TraceSwiftlet.SPACE_KERNEL);
-        SwiftletManager.getInstance().addSwiftletManagerListener("sys$log", new SwiftletManagerAdapter() {
-            public void swiftletStarted(SwiftletManagerEvent evt) {
-                logSwiftlet = (LogSwiftlet) SwiftletManager.getInstance().getSwiftlet("sys$log");
-            }
-        });
-        SwiftletManager.getInstance().addSwiftletManagerListener("sys$mgmt", new SwiftletManagerAdapter() {
-            public void swiftletStarted(SwiftletManagerEvent evt) {
-                mgmtSwiftlet = (MgmtSwiftlet) SwiftletManager.getInstance().getSwiftlet("sys$mgmt");
-            }
-        });
-        SwiftletManager.getInstance().addSwiftletManagerListener("sys$deploy", new SwiftletManagerAdapter() {
-            public void swiftletStarted(SwiftletManagerEvent evt) {
-                deploySwiftlet = (DeploySwiftlet) SwiftletManager.getInstance().getSwiftlet("sys$deploy");
-                deploySpace = deploySwiftlet.getDeploySpace(SPACE_NAME);
-            }
-        });
-        SwiftletManager.getInstance().addSwiftletManagerListener("sys$scheduler", new SwiftletManagerAdapter() {
-            public void swiftletStarted(SwiftletManagerEvent evt) {
-                start();
-            }
-        });
+        logSwiftlet = (LogSwiftlet) SwiftletManager.getInstance().getSwiftlet("sys$log");
+        mgmtSwiftlet = (MgmtSwiftlet) SwiftletManager.getInstance().getSwiftlet("sys$mgmt");
+        deploySwiftlet = (DeploySwiftlet) SwiftletManager.getInstance().getSwiftlet("sys$deploy");
+        deploySpace = deploySwiftlet.getDeploySpace(SPACE_NAME);
         if (traceSpace.enabled) traceSpace.trace("SwiftletManager", toString() + "/created");
     }
 
@@ -107,6 +88,13 @@ public class SwiftletDeployer implements DeployListener {
                 traceSpace.trace("SwiftletManager", toString() + "/cannot deploy Extension Swiftlets, deploy space '" + SPACE_NAME + "' undefined!");
         }
         if (traceSpace.enabled) traceSpace.trace("SwiftletManager", toString() + "/start done");
+    }
+
+    public void stop() {
+        if (traceSpace.enabled) traceSpace.trace("SwiftletManager", toString() + "/stop ...");
+        if (deploySpace != null)
+            deploySpace.setDeployListener(null);
+        if (traceSpace.enabled) traceSpace.trace("SwiftletManager", toString() + "/stop ...");
     }
 
     private int executeCLICommands(Bundle bundle, CLIExecutor cliexec, String phase, boolean old) throws Exception {
