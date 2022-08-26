@@ -960,32 +960,32 @@ public class SwiftletManager {
             al.add("Error creating configuration backup: " + e);
         }
         try {
-            Document doc = DocumentHelper.createDocument();
-            doc.addComment("  SwiftMQ Configuration. Last Save Time: " + new Date() + "  ");
-            Element root = DocumentHelper.createElement("router");
-            root.addAttribute("name", (String) entity.getEntity(Configuration.ENV_ENTITY).getProperty("routername").getValue());
-            root.addAttribute("kernelpath", routerConfig.getRootElement().attributeValue("kernelpath"));
-            root.addAttribute("release", Version.getKernelConfigRelease());
-            root.addAttribute("startorder", routerConfig.getRootElement().attributeValue("startorder"));
-            boolean b = (Boolean) entity.getEntity(Configuration.ENV_ENTITY).getProperty("use-smart-tree").getValue();
-            if (!b)
-                root.addAttribute("use-smart-tree", "false");
-            long l = (Long) entity.getEntity(Configuration.ENV_ENTITY).getProperty("memory-collect-interval").getValue();
-            if (l != 10000)
-                root.addAttribute("memory-collect-interval", String.valueOf(l));
-            Element[] optional = getOptionalElements();
-            if (optional != null) {
-                for (Element anOptional : optional) XMLUtilities.elementToXML(anOptional, root);
-            }
-            doc.setRootElement(root);
-            Map configs = entity.getEntities();
-            for (Object o : configs.keySet()) {
-                Entity c = (Entity) configs.get((String) o);
-                if (c instanceof Configuration) {
-                    XMLUtilities.configToXML((Configuration) c, root);
-                }
-            }
-            XMLUtilities.writeDocument(doc, configFilename);
+//            Document doc = DocumentHelper.createDocument();
+//            doc.addComment("  SwiftMQ Configuration. Last Save Time: " + new Date() + "  ");
+//            Element root = DocumentHelper.createElement("router");
+//            root.addAttribute("name", (String) entity.getEntity(Configuration.ENV_ENTITY).getProperty("routername").getValue());
+//            root.addAttribute("kernelpath", routerConfig.getRootElement().attributeValue("kernelpath"));
+//            root.addAttribute("release", Version.getKernelConfigRelease());
+//            root.addAttribute("startorder", routerConfig.getRootElement().attributeValue("startorder"));
+//            boolean b = (Boolean) entity.getEntity(Configuration.ENV_ENTITY).getProperty("use-smart-tree").getValue();
+//            if (!b)
+//                root.addAttribute("use-smart-tree", "false");
+//            long l = (Long) entity.getEntity(Configuration.ENV_ENTITY).getProperty("memory-collect-interval").getValue();
+//            if (l != 10000)
+//                root.addAttribute("memory-collect-interval", String.valueOf(l));
+//            Element[] optional = getOptionalElements();
+//            if (optional != null) {
+//                for (Element anOptional : optional) XMLUtilities.elementToXML(anOptional, root);
+//            }
+//            doc.setRootElement(root);
+//            Map configs = entity.getEntities();
+//            for (Object o : configs.keySet()) {
+//                Entity c = (Entity) configs.get((String) o);
+//                if (c instanceof Configuration) {
+//                    XMLUtilities.configToXML((Configuration) c, root);
+//                }
+//            }
+            XMLUtilities.writeDocument(routerConfig, configFilename);
             al.add("Configuration saved to file '" + configFilename + "'.");
         } catch (Exception e) {
             al.add("Error saving configuration: " + e);
