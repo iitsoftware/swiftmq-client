@@ -414,6 +414,7 @@ public class SwiftletManager {
         swiftlet.setStartupTime(startupTime);
         swiftletTable.put(name, swiftlet);
         swiftlet = null;
+        saveConfiguration();
         trace("loadExtensionSwiftlet: '" + name + "' DONE.");
     }
 
@@ -983,8 +984,6 @@ public class SwiftletManager {
                 Entity c = (Entity) configs.get((String) o);
                 if (c instanceof Configuration)
                     XMLUtilities.configToXML((Configuration) c, root);
-                else
-                    XMLUtilities.entityToXML(root, "swiftlet", c, true);
             }
             XMLUtilities.writeDocument(doc, configFilename);
             al.add("Configuration saved to file '" + configFilename + "'.");
