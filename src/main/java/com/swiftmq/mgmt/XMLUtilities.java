@@ -550,7 +550,7 @@ public class XMLUtilities {
         }
     }
 
-    private static void entityToXML(Element parent, String tagName, Entity entity, boolean addName) throws Exception {
+    public static void entityToXML(Element parent, String tagName, Entity entity, boolean addName) throws Exception {
         Element node = DocumentHelper.createElement(addName ? tagName : entity.getName());
         fillAttributes(node, entity, addName);
         Map m = entity.getEntities();
