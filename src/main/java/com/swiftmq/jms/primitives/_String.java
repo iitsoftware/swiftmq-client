@@ -56,7 +56,7 @@ public class _String implements Dumpable, Primitive {
 
     public void readContent(DataInput in)
             throws IOException {
-        value = new String(in.readUTF());
+        value = in.readUTF();
     }
 
     public String toString() {

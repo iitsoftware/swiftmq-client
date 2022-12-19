@@ -18,16 +18,16 @@
 package com.swiftmq.jms.primitives;
 
 public interface Primitive {
-    public static final int INT = 0;
-    public static final int LONG = 1;
-    public static final int DOUBLE = 2;
-    public static final int FLOAT = 3;
-    public static final int BOOLEAN = 4;
-    public static final int CHAR = 5;
-    public static final int SHORT = 6;
-    public static final int BYTE = 7;
-    public static final int BYTES = 8;
-    public static final int STRING = 9;
+    int INT = 0;
+    int LONG = 1;
+    int DOUBLE = 2;
+    int FLOAT = 3;
+    int BOOLEAN = 4;
+    int CHAR = 5;
+    int SHORT = 6;
+    int BYTE = 7;
+    int BYTES = 8;
+    int STRING = 9;
 
-    public Object getObject();
+    Object getObject();
 }

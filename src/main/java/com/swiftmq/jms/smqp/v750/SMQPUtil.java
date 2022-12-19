@@ -145,20 +145,18 @@ public class SMQPUtil {
 
     static MessageEntry read(MessageEntry m, DataInput in) throws IOException {
         MessageEntry mi = new MessageEntry();
-        mi.readContent((LengthCaptureDataInput) in);
+        mi.readContent(in);
         return mi;
     }
 
     static void write(MessageEntry[] m, DataOutput out) throws IOException {
         out.writeInt(m.length);
-        for (int i = 0; i < m.length; i++)
-            m[i].writeContent(out);
+        for (MessageEntry messageEntry : m) messageEntry.writeContent(out);
     }
 
     static void write(MessageEntry[] m, ToClientSerializer serializer) throws IOException {
         serializer.getDataOutput().writeInt(m.length);
-        for (int i = 0; i < m.length; i++)
-            m[i].writeContent(serializer);
+        for (MessageEntry messageEntry : m) messageEntry.writeContent(serializer);
     }
 
     static MessageEntry[] read(MessageEntry[] m, DataInput in) throws IOException {
@@ -174,8 +172,8 @@ public class SMQPUtil {
     static void writebytearray(List l, DataOutput out) throws IOException {
         int length = l.size();
         out.writeInt(length);
-        for (int i = 0; i < length; i++) {
-            byte[] b = (byte[]) l.get(i);
+        for (Object o : l) {
+            byte[] b = (byte[]) o;
             out.writeInt(b.length);
             out.write(b);
         }
@@ -218,8 +216,8 @@ public class SMQPUtil {
     static void writeRequest(List l, DataOutput out) throws IOException {
         int length = l.size();
         out.writeInt(length);
-        for (int i = 0; i < length; i++) {
-            Dumpalizer.dump(out, (Dumpable) l.get(i));
+        for (Object o : l) {
+            Dumpalizer.dump(out, (Dumpable) o);
         }
     }
 
@@ -288,7 +286,7 @@ public class SMQPUtil {
     public static MessageImpl toMessage(byte[] b) throws Exception {
         DataByteArrayInputStream dbis = new DataByteArrayInputStream(b);
         MessageImpl msg = MessageImpl.createInstance(dbis.readInt());
-        msg.readContent((LengthCaptureDataInput) dbis);
+        msg.readContent(dbis);
         return msg;
     }
 

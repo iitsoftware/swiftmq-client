@@ -4,17 +4,17 @@ import javax.jms.*;
 
 public class PooledProducer
         implements QueueSender, TopicPublisher {
-    static final boolean DEBUG = Boolean.valueOf(System.getProperty("swiftmq.springsupport.debug", "false")).booleanValue();
-    PooledSession pooledSession = null;
-    MessageProducer internalProducer = null;
-    Destination internalDestination = null;
+    static final boolean DEBUG = Boolean.valueOf(System.getProperty("swiftmq.springsupport.debug", "false"));
+    PooledSession pooledSession;
+    MessageProducer internalProducer;
+    Destination internalDestination;
     long checkInTime = -1;
 
     public PooledProducer(PooledSession pooledSession, MessageProducer internalProducer, Destination internalDestination) {
         this.pooledSession = pooledSession;
         this.internalProducer = internalProducer;
         this.internalDestination = internalDestination;
-        if (DEBUG) System.out.println(toString() + "/created");
+        if (DEBUG) System.out.println(this + "/created");
     }
 
     public boolean getDisableMessageID() throws JMSException {
@@ -66,7 +66,7 @@ public class PooledProducer
     }
 
     protected void closeInternal() {
-        if (DEBUG) System.out.println(toString() + "/closeInternal");
+        if (DEBUG) System.out.println(this + "/closeInternal");
         try {
             internalProducer.close();
         } catch (JMSException e) {
@@ -74,19 +74,19 @@ public class PooledProducer
     }
 
     public void close() throws JMSException {
-        if (DEBUG) System.out.println(toString() + "/close");
+        if (DEBUG) System.out.println(this + "/close");
         checkInTime = System.currentTimeMillis();
         pooledSession.checkIn(this);
     }
 
     public void send(Destination destination, Message message) throws JMSException {
-        if (DEBUG) System.out.println(toString() + "/send, destination=" + destination + ", message=" + message);
+        if (DEBUG) System.out.println(this + "/send, destination=" + destination + ", message=" + message);
         internalProducer.send(destination, message);
     }
 
     public void send(Destination destination, Message message, int i, int i1, long l) throws JMSException {
         if (DEBUG)
-            System.out.println(toString() + "/send, destination=" + destination + ", message=" + message + ", i=" + i + ", i1=" + i1 + ", l=" + l);
+            System.out.println(this + "/send, destination=" + destination + ", message=" + message + ", i=" + i + ", i1=" + i1 + ", l=" + l);
         internalProducer.send(destination, message, i, i1, l);
     }
 
@@ -95,25 +95,25 @@ public class PooledProducer
     }
 
     public void send(Message message) throws JMSException {
-        if (DEBUG) System.out.println(toString() + "/send, message=" + message);
+        if (DEBUG) System.out.println(this + "/send, message=" + message);
         internalProducer.send(message);
 
     }
 
     public void send(Message message, int i, int i1, long l) throws JMSException {
         if (DEBUG)
-            System.out.println(toString() + "/send, message=" + message + ", i=" + i + ", i1=" + i1 + ", l=" + l);
+            System.out.println(this + "/send, message=" + message + ", i=" + i + ", i1=" + i1 + ", l=" + l);
         internalProducer.send(message, i, i1, l);
     }
 
     public void send(Queue queue, Message message) throws JMSException {
-        if (DEBUG) System.out.println(toString() + "/send, queue=" + queue + ", message=" + message);
+        if (DEBUG) System.out.println(this + "/send, queue=" + queue + ", message=" + message);
         internalProducer.send(queue, message);
     }
 
     public void send(Queue queue, Message message, int i, int i1, long l) throws JMSException {
         if (DEBUG)
-            System.out.println(toString() + "/send, queue=" + queue + ", message=" + message + ", i=" + i + ", i1=" + i1 + ", l=" + l);
+            System.out.println(this + "/send, queue=" + queue + ", message=" + message + ", i=" + i + ", i1=" + i1 + ", l=" + l);
         internalProducer.send(queue, message, i, i1, l);
     }
 
@@ -122,24 +122,24 @@ public class PooledProducer
     }
 
     public void publish(Message message) throws JMSException {
-        if (DEBUG) System.out.println(toString() + "/publish, message=" + message);
+        if (DEBUG) System.out.println(this + "/publish, message=" + message);
         internalProducer.send(message);
     }
 
     public void publish(Message message, int i, int i1, long l) throws JMSException {
         if (DEBUG)
-            System.out.println(toString() + "/publish, message=" + message + ", i=" + i + ", i1=" + i1 + ", l=" + l);
+            System.out.println(this + "/publish, message=" + message + ", i=" + i + ", i1=" + i1 + ", l=" + l);
         internalProducer.send(message, i, i1, l);
     }
 
     public void publish(Topic topic, Message message) throws JMSException {
-        if (DEBUG) System.out.println(toString() + "/publish, topic=" + topic + ", message=" + message);
+        if (DEBUG) System.out.println(this + "/publish, topic=" + topic + ", message=" + message);
         internalProducer.send(topic, message);
     }
 
     public void publish(Topic topic, Message message, int i, int i1, long l) throws JMSException {
         if (DEBUG)
-            System.out.println(toString() + "/publish, topic=" + topic + ", message=" + message + ", i=" + i + ", i1=" + i1 + ", l=" + l);
+            System.out.println(this + "/publish, topic=" + topic + ", message=" + message + ", i=" + i + ", i1=" + i1 + ", l=" + l);
         internalProducer.send(topic, message, i, i1, l);
     }
 

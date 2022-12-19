@@ -1,17 +1,16 @@
 package com.swiftmq.jms.springsupport;
 
 public class ConsumerKey {
-    String key = null;
+    String key;
 
     public ConsumerKey(String destName, String selector, boolean noLocal, String durName) {
-        StringBuffer b = new StringBuffer(destName);
-        b.append("/");
-        b.append(selector == null ? "null" : selector);
-        b.append("/");
-        b.append(noLocal ? "true" : "false");
-        b.append("/");
-        b.append(durName == null ? "null" : durName);
-        key = b.toString();
+        String b = destName + "/" +
+                (selector == null ? "null" : selector) +
+                "/" +
+                (noLocal ? "true" : "false") +
+                "/" +
+                (durName == null ? "null" : durName);
+        key = b;
     }
 
     public String getKey() {

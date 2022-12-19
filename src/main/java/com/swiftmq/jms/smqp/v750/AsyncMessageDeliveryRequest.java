@@ -138,12 +138,12 @@ public class AsyncMessageDeliveryRequest extends Request implements ToClientSeri
         SMQPUtil.write(listenerId, out);
         if (messageEntry != null) {
             out.writeBoolean(true);
-            SMQPUtil.write(messageEntry, (ToClientSerializer) this);
+            SMQPUtil.write(messageEntry, this);
         } else
             out.writeBoolean(false);
         if (bulk != null) {
             out.writeBoolean(true);
-            SMQPUtil.write(bulk, (ToClientSerializer) this);
+            SMQPUtil.write(bulk, this);
         } else
             out.writeBoolean(false);
         SMQPUtil.write(sessionDispatchId, out);
