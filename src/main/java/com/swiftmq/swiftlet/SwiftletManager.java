@@ -797,7 +797,7 @@ public class SwiftletManager {
         String className = doc.getRootElement().attributeValue("class");
         if (className == null)
             throw new Exception("Missing Attribute 'class' for Swiftlet '" + swiftletName + "'");
-        return (Swiftlet) bundle.getBundleLoader().loadClass(className).newInstance();
+        return (Swiftlet) bundle.getBundleLoader().loadClass(className).getDeclaredConstructor().newInstance();
     }
 
     /**

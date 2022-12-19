@@ -17,10 +17,7 @@
 
 package com.swiftmq.jms;
 
-import com.swiftmq.client.Versions;
 import com.swiftmq.tools.file.GenerationalFileWriter;
-import com.swiftmq.tools.file.NumberGenerationProvider;
-import com.swiftmq.tools.file.RolloverSizeProvider;
 
 import javax.jms.ConnectionFactory;
 import javax.jms.Message;
@@ -60,9 +57,9 @@ public class SwiftMQConnectionFactory {
     public static final String DUPLICATE_BACKLOG_SIZE = "duplicate_backlog_size";
 
     static {
-        if (Boolean.valueOf(System.getProperty("swiftmq.client.debugtofile.enabled", "false")).booleanValue()) {
+        if (Boolean.parseBoolean(System.getProperty("swiftmq.client.debugtofile.enabled", "false"))) {
             System.setOut(new PrintStream(new OutputStream() {
-                byte[] buffer = new byte[1];
+                final byte[] buffer = new byte[1];
                 Writer writer = null;
 
                 public void write(byte[] bytes) throws IOException {
@@ -93,15 +90,7 @@ public class SwiftMQConnectionFactory {
 
                 private void checkWriter() throws IOException {
                     if (writer == null) {
-                        writer = new GenerationalFileWriter(System.getProperty("swiftmq.client.debugtofile.directory", System.getProperty("user.dir")), System.getProperty("swiftmq.client.debugtofile.filename", "swiftmqclient"), new RolloverSizeProvider() {
-                            public long getRollOverSize() {
-                                return Integer.parseInt(System.getProperty("swiftmq.client.debugtofile.rolloversizekb", "1024")) * 1024;
-                            }
-                        }, new NumberGenerationProvider() {
-                            public int getNumberGenerations() {
-                                return Integer.parseInt(System.getProperty("swiftmq.client.debugtofile.generations", "10"));
-                            }
-                        }
+                        writer = new GenerationalFileWriter(System.getProperty("swiftmq.client.debugtofile.directory", System.getProperty("user.dir")), System.getProperty("swiftmq.client.debugtofile.filename", "swiftmqclient"), () -> Integer.parseInt(System.getProperty("swiftmq.client.debugtofile.rolloversizekb", "1024")) * 1024L, () -> Integer.parseInt(System.getProperty("swiftmq.client.debugtofile.generations", "10"))
                         );
                     }
                 }
@@ -119,7 +108,7 @@ public class SwiftMQConnectionFactory {
         return s;
     }
 
-    private static String getDefaultProp(String prop, Map map, String defaultValue) throws Exception {
+    private static String getDefaultProp(String prop, Map map, String defaultValue) {
         String s = (String) map.get(prop);
         if (s == null)
             s = defaultValue;
@@ -127,359 +116,17 @@ public class SwiftMQConnectionFactory {
     }
 
     public static ConnectionFactory create(Map properties) throws Exception {
-        switch (Versions.JMS_CURRENT) {
-            case 400:
-                return createV400CF(properties);
-            case 500:
-                return createV500CF(properties);
-            case 510:
-                return createV510CF(properties);
-            case 600:
-                return createV600CF(properties);
-            case 610:
-                return createV610CF(properties);
-            case 630:
-                return createV630CF(properties);
-            case 750:
-                return createV750CF(properties);
-        }
         return createV750CF(properties);
     }
 
-    private static ConnectionFactory createV400CF(Map properties)
-            throws Exception {
-        boolean intraVM = false;
-        String s = (String) properties.get(INTRAVM);
-        if (s != null)
-            intraVM = Boolean.valueOf(s).booleanValue();
-        com.swiftmq.jms.v400.ConnectionFactoryImpl cf = null;
-        if (intraVM) {
-            cf = new com.swiftmq.jms.v400.ConnectionFactoryImpl(null,
-                    null,
-                    null,
-                    0,
-                    0,
-                    getDefaultProp(CLIENTID, properties, null),
-                    Integer.parseInt(getDefaultProp(SMQP_PRODUCER_REPLY_INTERVAL, properties, "20")),
-                    Integer.parseInt(getDefaultProp(SMQP_CONSUMER_CACHE_SIZE, properties, "500")),
-                    Integer.parseInt(getDefaultProp(JMS_DELIVERY_MODE, properties, String.valueOf(Message.DEFAULT_DELIVERY_MODE))),
-                    Integer.parseInt(getDefaultProp(JMS_PRIORITY, properties, String.valueOf(Message.DEFAULT_PRIORITY))),
-                    Long.parseLong(getDefaultProp(JMS_TTL, properties, String.valueOf(Message.DEFAULT_TIME_TO_LIVE))),
-                    Boolean.valueOf(getDefaultProp(JMS_MESSAGEID_ENABLED, properties, "true")).booleanValue(),
-                    Boolean.valueOf(getDefaultProp(JMS_TIMESTAMP_ENABLED, properties, "true")).booleanValue(),
-                    Boolean.valueOf(getDefaultProp(USE_THREAD_CONTEXT_CLASSLOADER, properties, "false")).booleanValue(),
-                    Integer.parseInt(getDefaultProp(INPUT_BUFFER_SIZE, properties, "131072")),
-                    Integer.parseInt(getDefaultProp(INPUT_EXTEND_SIZE, properties, "65536")),
-                    Integer.parseInt(getDefaultProp(OUTPUT_BUFFER_SIZE, properties, "131072")),
-                    Integer.parseInt(getDefaultProp(OUTPUT_EXTEND_SIZE, properties, "65536")),
-                    true);
-        } else {
-            cf = new com.swiftmq.jms.v400.ConnectionFactoryImpl(null,
-                    getMandatoryProp(SOCKETFACTORY, properties),
-                    getMandatoryProp(HOSTNAME, properties),
-                    Integer.parseInt(getMandatoryProp(PORT, properties)),
-                    Long.parseLong(getDefaultProp(KEEPALIVEINTERVAL, properties, "0")),
-                    getDefaultProp(CLIENTID, properties, null),
-                    Integer.parseInt(getDefaultProp(SMQP_PRODUCER_REPLY_INTERVAL, properties, "20")),
-                    Integer.parseInt(getDefaultProp(SMQP_CONSUMER_CACHE_SIZE, properties, "500")),
-                    Integer.parseInt(getDefaultProp(JMS_DELIVERY_MODE, properties, String.valueOf(Message.DEFAULT_DELIVERY_MODE))),
-                    Integer.parseInt(getDefaultProp(JMS_PRIORITY, properties, String.valueOf(Message.DEFAULT_PRIORITY))),
-                    Long.parseLong(getDefaultProp(JMS_TTL, properties, String.valueOf(Message.DEFAULT_TIME_TO_LIVE))),
-                    Boolean.valueOf(getDefaultProp(JMS_MESSAGEID_ENABLED, properties, "true")).booleanValue(),
-                    Boolean.valueOf(getDefaultProp(JMS_TIMESTAMP_ENABLED, properties, "true")).booleanValue(),
-                    Boolean.valueOf(getDefaultProp(USE_THREAD_CONTEXT_CLASSLOADER, properties, "false")).booleanValue(),
-                    Integer.parseInt(getDefaultProp(INPUT_BUFFER_SIZE, properties, "131072")),
-                    Integer.parseInt(getDefaultProp(INPUT_EXTEND_SIZE, properties, "65536")),
-                    Integer.parseInt(getDefaultProp(OUTPUT_BUFFER_SIZE, properties, "131072")),
-                    Integer.parseInt(getDefaultProp(OUTPUT_EXTEND_SIZE, properties, "65536")),
-                    false);
-        }
-        return cf;
-    }
-
-    private static ConnectionFactory createV500CF(Map properties)
-            throws Exception {
-        boolean intraVM = false;
-        String s = (String) properties.get(INTRAVM);
-        if (s != null)
-            intraVM = Boolean.valueOf(s).booleanValue();
-        com.swiftmq.jms.v500.ConnectionFactoryImpl cf = null;
-        if (intraVM) {
-            cf = new com.swiftmq.jms.v500.ConnectionFactoryImpl(null,
-                    null,
-                    null,
-                    0,
-                    0,
-                    getDefaultProp(CLIENTID, properties, null),
-                    Integer.parseInt(getDefaultProp(SMQP_PRODUCER_REPLY_INTERVAL, properties, "20")),
-                    Integer.parseInt(getDefaultProp(SMQP_CONSUMER_CACHE_SIZE, properties, "500")),
-                    Integer.parseInt(getDefaultProp(JMS_DELIVERY_MODE, properties, String.valueOf(Message.DEFAULT_DELIVERY_MODE))),
-                    Integer.parseInt(getDefaultProp(JMS_PRIORITY, properties, String.valueOf(Message.DEFAULT_PRIORITY))),
-                    Long.parseLong(getDefaultProp(JMS_TTL, properties, String.valueOf(Message.DEFAULT_TIME_TO_LIVE))),
-                    Boolean.valueOf(getDefaultProp(JMS_MESSAGEID_ENABLED, properties, "true")).booleanValue(),
-                    Boolean.valueOf(getDefaultProp(JMS_TIMESTAMP_ENABLED, properties, "true")).booleanValue(),
-                    Boolean.valueOf(getDefaultProp(USE_THREAD_CONTEXT_CLASSLOADER, properties, "false")).booleanValue(),
-                    Integer.parseInt(getDefaultProp(INPUT_BUFFER_SIZE, properties, "131072")),
-                    Integer.parseInt(getDefaultProp(INPUT_EXTEND_SIZE, properties, "65536")),
-                    Integer.parseInt(getDefaultProp(OUTPUT_BUFFER_SIZE, properties, "131072")),
-                    Integer.parseInt(getDefaultProp(OUTPUT_EXTEND_SIZE, properties, "65536")),
-                    true);
-        } else {
-            cf = new com.swiftmq.jms.v500.ConnectionFactoryImpl(null,
-                    getMandatoryProp(SOCKETFACTORY, properties),
-                    getMandatoryProp(HOSTNAME, properties),
-                    Integer.parseInt(getMandatoryProp(PORT, properties)),
-                    Long.parseLong(getDefaultProp(KEEPALIVEINTERVAL, properties, "0")),
-                    getDefaultProp(CLIENTID, properties, null),
-                    Integer.parseInt(getDefaultProp(SMQP_PRODUCER_REPLY_INTERVAL, properties, "20")),
-                    Integer.parseInt(getDefaultProp(SMQP_CONSUMER_CACHE_SIZE, properties, "500")),
-                    Integer.parseInt(getDefaultProp(JMS_DELIVERY_MODE, properties, String.valueOf(Message.DEFAULT_DELIVERY_MODE))),
-                    Integer.parseInt(getDefaultProp(JMS_PRIORITY, properties, String.valueOf(Message.DEFAULT_PRIORITY))),
-                    Long.parseLong(getDefaultProp(JMS_TTL, properties, String.valueOf(Message.DEFAULT_TIME_TO_LIVE))),
-                    Boolean.valueOf(getDefaultProp(JMS_MESSAGEID_ENABLED, properties, "true")).booleanValue(),
-                    Boolean.valueOf(getDefaultProp(JMS_TIMESTAMP_ENABLED, properties, "true")).booleanValue(),
-                    Boolean.valueOf(getDefaultProp(USE_THREAD_CONTEXT_CLASSLOADER, properties, "false")).booleanValue(),
-                    Integer.parseInt(getDefaultProp(INPUT_BUFFER_SIZE, properties, "131072")),
-                    Integer.parseInt(getDefaultProp(INPUT_EXTEND_SIZE, properties, "65536")),
-                    Integer.parseInt(getDefaultProp(OUTPUT_BUFFER_SIZE, properties, "131072")),
-                    Integer.parseInt(getDefaultProp(OUTPUT_EXTEND_SIZE, properties, "65536")),
-                    false);
-        }
-        return cf;
-    }
-
-    private static ConnectionFactory createV510CF(Map properties)
-            throws Exception {
-        boolean intraVM = false;
-        String s = (String) properties.get(INTRAVM);
-        if (s != null)
-            intraVM = Boolean.valueOf(s).booleanValue();
-        com.swiftmq.jms.v510.ConnectionFactoryImpl cf = null;
-        if (intraVM) {
-            cf = new com.swiftmq.jms.v510.ConnectionFactoryImpl(null,
-                    null,
-                    null,
-                    0,
-                    0,
-                    getDefaultProp(CLIENTID, properties, null),
-                    Integer.parseInt(getDefaultProp(SMQP_PRODUCER_REPLY_INTERVAL, properties, "20")),
-                    Integer.parseInt(getDefaultProp(SMQP_CONSUMER_CACHE_SIZE, properties, "500")),
-                    Integer.parseInt(getDefaultProp(JMS_DELIVERY_MODE, properties, String.valueOf(Message.DEFAULT_DELIVERY_MODE))),
-                    Integer.parseInt(getDefaultProp(JMS_PRIORITY, properties, String.valueOf(Message.DEFAULT_PRIORITY))),
-                    Long.parseLong(getDefaultProp(JMS_TTL, properties, String.valueOf(Message.DEFAULT_TIME_TO_LIVE))),
-                    Boolean.valueOf(getDefaultProp(JMS_MESSAGEID_ENABLED, properties, "true")).booleanValue(),
-                    Boolean.valueOf(getDefaultProp(JMS_TIMESTAMP_ENABLED, properties, "true")).booleanValue(),
-                    Boolean.valueOf(getDefaultProp(USE_THREAD_CONTEXT_CLASSLOADER, properties, "false")).booleanValue(),
-                    Integer.parseInt(getDefaultProp(INPUT_BUFFER_SIZE, properties, "131072")),
-                    Integer.parseInt(getDefaultProp(INPUT_EXTEND_SIZE, properties, "65536")),
-                    Integer.parseInt(getDefaultProp(OUTPUT_BUFFER_SIZE, properties, "131072")),
-                    Integer.parseInt(getDefaultProp(OUTPUT_EXTEND_SIZE, properties, "65536")),
-                    true);
-        } else {
-            cf = new com.swiftmq.jms.v510.ConnectionFactoryImpl(null,
-                    getMandatoryProp(SOCKETFACTORY, properties),
-                    getMandatoryProp(HOSTNAME, properties),
-                    Integer.parseInt(getMandatoryProp(PORT, properties)),
-                    Long.parseLong(getDefaultProp(KEEPALIVEINTERVAL, properties, "0")),
-                    getDefaultProp(CLIENTID, properties, null),
-                    Integer.parseInt(getDefaultProp(SMQP_PRODUCER_REPLY_INTERVAL, properties, "20")),
-                    Integer.parseInt(getDefaultProp(SMQP_CONSUMER_CACHE_SIZE, properties, "500")),
-                    Integer.parseInt(getDefaultProp(JMS_DELIVERY_MODE, properties, String.valueOf(Message.DEFAULT_DELIVERY_MODE))),
-                    Integer.parseInt(getDefaultProp(JMS_PRIORITY, properties, String.valueOf(Message.DEFAULT_PRIORITY))),
-                    Long.parseLong(getDefaultProp(JMS_TTL, properties, String.valueOf(Message.DEFAULT_TIME_TO_LIVE))),
-                    Boolean.valueOf(getDefaultProp(JMS_MESSAGEID_ENABLED, properties, "true")).booleanValue(),
-                    Boolean.valueOf(getDefaultProp(JMS_TIMESTAMP_ENABLED, properties, "true")).booleanValue(),
-                    Boolean.valueOf(getDefaultProp(USE_THREAD_CONTEXT_CLASSLOADER, properties, "false")).booleanValue(),
-                    Integer.parseInt(getDefaultProp(INPUT_BUFFER_SIZE, properties, "131072")),
-                    Integer.parseInt(getDefaultProp(INPUT_EXTEND_SIZE, properties, "65536")),
-                    Integer.parseInt(getDefaultProp(OUTPUT_BUFFER_SIZE, properties, "131072")),
-                    Integer.parseInt(getDefaultProp(OUTPUT_EXTEND_SIZE, properties, "65536")),
-                    false);
-        }
-        return cf;
-    }
-
-    private static ConnectionFactory createV600CF(Map properties)
-            throws Exception {
-        boolean intraVM = false;
-        String s = (String) properties.get(INTRAVM);
-        if (s != null)
-            intraVM = Boolean.valueOf(s).booleanValue();
-        com.swiftmq.jms.v600.ConnectionFactoryImpl cf = null;
-        if (intraVM) {
-            cf = new com.swiftmq.jms.v600.ConnectionFactoryImpl(null,
-                    null,
-                    null,
-                    0,
-                    0,
-                    getDefaultProp(CLIENTID, properties, null),
-                    Integer.parseInt(getDefaultProp(SMQP_PRODUCER_REPLY_INTERVAL, properties, "20")),
-                    Integer.parseInt(getDefaultProp(SMQP_CONSUMER_CACHE_SIZE, properties, "500")),
-                    Integer.parseInt(getDefaultProp(JMS_DELIVERY_MODE, properties, String.valueOf(Message.DEFAULT_DELIVERY_MODE))),
-                    Integer.parseInt(getDefaultProp(JMS_PRIORITY, properties, String.valueOf(Message.DEFAULT_PRIORITY))),
-                    Long.parseLong(getDefaultProp(JMS_TTL, properties, String.valueOf(Message.DEFAULT_TIME_TO_LIVE))),
-                    Boolean.valueOf(getDefaultProp(JMS_MESSAGEID_ENABLED, properties, "true")).booleanValue(),
-                    Boolean.valueOf(getDefaultProp(JMS_TIMESTAMP_ENABLED, properties, "true")).booleanValue(),
-                    Boolean.valueOf(getDefaultProp(USE_THREAD_CONTEXT_CLASSLOADER, properties, "false")).booleanValue(),
-                    Integer.parseInt(getDefaultProp(INPUT_BUFFER_SIZE, properties, "131072")),
-                    Integer.parseInt(getDefaultProp(INPUT_EXTEND_SIZE, properties, "65536")),
-                    Integer.parseInt(getDefaultProp(OUTPUT_BUFFER_SIZE, properties, "131072")),
-                    Integer.parseInt(getDefaultProp(OUTPUT_EXTEND_SIZE, properties, "65536")),
-                    true);
-        } else {
-            cf = new com.swiftmq.jms.v600.ConnectionFactoryImpl(null,
-                    getMandatoryProp(SOCKETFACTORY, properties),
-                    getMandatoryProp(HOSTNAME, properties),
-                    Integer.parseInt(getMandatoryProp(PORT, properties)),
-                    Long.parseLong(getDefaultProp(KEEPALIVEINTERVAL, properties, "0")),
-                    getDefaultProp(CLIENTID, properties, null),
-                    Integer.parseInt(getDefaultProp(SMQP_PRODUCER_REPLY_INTERVAL, properties, "20")),
-                    Integer.parseInt(getDefaultProp(SMQP_CONSUMER_CACHE_SIZE, properties, "500")),
-                    Integer.parseInt(getDefaultProp(JMS_DELIVERY_MODE, properties, String.valueOf(Message.DEFAULT_DELIVERY_MODE))),
-                    Integer.parseInt(getDefaultProp(JMS_PRIORITY, properties, String.valueOf(Message.DEFAULT_PRIORITY))),
-                    Long.parseLong(getDefaultProp(JMS_TTL, properties, String.valueOf(Message.DEFAULT_TIME_TO_LIVE))),
-                    Boolean.valueOf(getDefaultProp(JMS_MESSAGEID_ENABLED, properties, "true")).booleanValue(),
-                    Boolean.valueOf(getDefaultProp(JMS_TIMESTAMP_ENABLED, properties, "true")).booleanValue(),
-                    Boolean.valueOf(getDefaultProp(USE_THREAD_CONTEXT_CLASSLOADER, properties, "false")).booleanValue(),
-                    Integer.parseInt(getDefaultProp(INPUT_BUFFER_SIZE, properties, "131072")),
-                    Integer.parseInt(getDefaultProp(INPUT_EXTEND_SIZE, properties, "65536")),
-                    Integer.parseInt(getDefaultProp(OUTPUT_BUFFER_SIZE, properties, "131072")),
-                    Integer.parseInt(getDefaultProp(OUTPUT_EXTEND_SIZE, properties, "65536")),
-                    false);
-            cf.setReconnectEnabled(Boolean.valueOf(getDefaultProp(RECONNECT_ENABLED, properties, "false")).booleanValue());
-            cf.setRetryDelay(Long.parseLong(getDefaultProp(RECONNECT_RETRY_DELAY, properties, "10000")));
-            cf.setMaxRetries(Integer.parseInt(getDefaultProp(RECONNECT_MAX_RETRIES, properties, "10")));
-            cf.setHostname2(getDefaultProp(RECONNECT_HOSTNAME2, properties, null));
-            cf.setPort2(Integer.parseInt(getDefaultProp(RECONNECT_PORT2, properties, "0")));
-            cf.setDuplicateMessageDetection(Boolean.valueOf(getDefaultProp(DUPLICATE_DETECTION_ENABLED, properties, "false")).booleanValue());
-            cf.setDuplicateBacklogSize(Integer.parseInt(getDefaultProp(DUPLICATE_BACKLOG_SIZE, properties, "30000")));
-        }
-        return cf;
-    }
-
-    private static ConnectionFactory createV610CF(Map properties)
-            throws Exception {
-        boolean intraVM = false;
-        String s = (String) properties.get(INTRAVM);
-        if (s != null)
-            intraVM = Boolean.valueOf(s).booleanValue();
-        com.swiftmq.jms.v610.ConnectionFactoryImpl cf = null;
-        if (intraVM) {
-            cf = new com.swiftmq.jms.v610.ConnectionFactoryImpl(null,
-                    null,
-                    null,
-                    0,
-                    0,
-                    getDefaultProp(CLIENTID, properties, null),
-                    Integer.parseInt(getDefaultProp(SMQP_PRODUCER_REPLY_INTERVAL, properties, "20")),
-                    Integer.parseInt(getDefaultProp(SMQP_CONSUMER_CACHE_SIZE, properties, "500")),
-                    Integer.parseInt(getDefaultProp(JMS_DELIVERY_MODE, properties, String.valueOf(Message.DEFAULT_DELIVERY_MODE))),
-                    Integer.parseInt(getDefaultProp(JMS_PRIORITY, properties, String.valueOf(Message.DEFAULT_PRIORITY))),
-                    Long.parseLong(getDefaultProp(JMS_TTL, properties, String.valueOf(Message.DEFAULT_TIME_TO_LIVE))),
-                    Boolean.valueOf(getDefaultProp(JMS_MESSAGEID_ENABLED, properties, "true")).booleanValue(),
-                    Boolean.valueOf(getDefaultProp(JMS_TIMESTAMP_ENABLED, properties, "true")).booleanValue(),
-                    Boolean.valueOf(getDefaultProp(USE_THREAD_CONTEXT_CLASSLOADER, properties, "false")).booleanValue(),
-                    Integer.parseInt(getDefaultProp(INPUT_BUFFER_SIZE, properties, "131072")),
-                    Integer.parseInt(getDefaultProp(INPUT_EXTEND_SIZE, properties, "65536")),
-                    Integer.parseInt(getDefaultProp(OUTPUT_BUFFER_SIZE, properties, "131072")),
-                    Integer.parseInt(getDefaultProp(OUTPUT_EXTEND_SIZE, properties, "65536")),
-                    true);
-        } else {
-            cf = new com.swiftmq.jms.v610.ConnectionFactoryImpl(null,
-                    getMandatoryProp(SOCKETFACTORY, properties),
-                    getMandatoryProp(HOSTNAME, properties),
-                    Integer.parseInt(getMandatoryProp(PORT, properties)),
-                    Long.parseLong(getDefaultProp(KEEPALIVEINTERVAL, properties, "0")),
-                    getDefaultProp(CLIENTID, properties, null),
-                    Integer.parseInt(getDefaultProp(SMQP_PRODUCER_REPLY_INTERVAL, properties, "20")),
-                    Integer.parseInt(getDefaultProp(SMQP_CONSUMER_CACHE_SIZE, properties, "500")),
-                    Integer.parseInt(getDefaultProp(JMS_DELIVERY_MODE, properties, String.valueOf(Message.DEFAULT_DELIVERY_MODE))),
-                    Integer.parseInt(getDefaultProp(JMS_PRIORITY, properties, String.valueOf(Message.DEFAULT_PRIORITY))),
-                    Long.parseLong(getDefaultProp(JMS_TTL, properties, String.valueOf(Message.DEFAULT_TIME_TO_LIVE))),
-                    Boolean.valueOf(getDefaultProp(JMS_MESSAGEID_ENABLED, properties, "true")).booleanValue(),
-                    Boolean.valueOf(getDefaultProp(JMS_TIMESTAMP_ENABLED, properties, "true")).booleanValue(),
-                    Boolean.valueOf(getDefaultProp(USE_THREAD_CONTEXT_CLASSLOADER, properties, "false")).booleanValue(),
-                    Integer.parseInt(getDefaultProp(INPUT_BUFFER_SIZE, properties, "131072")),
-                    Integer.parseInt(getDefaultProp(INPUT_EXTEND_SIZE, properties, "65536")),
-                    Integer.parseInt(getDefaultProp(OUTPUT_BUFFER_SIZE, properties, "131072")),
-                    Integer.parseInt(getDefaultProp(OUTPUT_EXTEND_SIZE, properties, "65536")),
-                    false);
-            cf.setReconnectEnabled(Boolean.valueOf(getDefaultProp(RECONNECT_ENABLED, properties, "false")).booleanValue());
-            cf.setRetryDelay(Long.parseLong(getDefaultProp(RECONNECT_RETRY_DELAY, properties, "10000")));
-            cf.setMaxRetries(Integer.parseInt(getDefaultProp(RECONNECT_MAX_RETRIES, properties, "10")));
-            cf.setHostname2(getDefaultProp(RECONNECT_HOSTNAME2, properties, null));
-            cf.setPort2(Integer.parseInt(getDefaultProp(RECONNECT_PORT2, properties, "0")));
-            cf.setDuplicateMessageDetection(Boolean.valueOf(getDefaultProp(DUPLICATE_DETECTION_ENABLED, properties, "false")).booleanValue());
-            cf.setDuplicateBacklogSize(Integer.parseInt(getDefaultProp(DUPLICATE_BACKLOG_SIZE, properties, "30000")));
-        }
-        return cf;
-    }
-
-    private static ConnectionFactory createV630CF(Map properties)
-            throws Exception {
-        boolean intraVM = false;
-        String s = (String) properties.get(INTRAVM);
-        if (s != null)
-            intraVM = Boolean.valueOf(s).booleanValue();
-        com.swiftmq.jms.v630.ConnectionFactoryImpl cf = null;
-        if (intraVM) {
-            cf = new com.swiftmq.jms.v630.ConnectionFactoryImpl(null,
-                    null,
-                    null,
-                    0,
-                    0,
-                    getDefaultProp(CLIENTID, properties, null),
-                    Integer.parseInt(getDefaultProp(SMQP_PRODUCER_REPLY_INTERVAL, properties, "20")),
-                    Integer.parseInt(getDefaultProp(SMQP_CONSUMER_CACHE_SIZE, properties, "500")),
-                    Integer.parseInt(getDefaultProp(JMS_DELIVERY_MODE, properties, String.valueOf(Message.DEFAULT_DELIVERY_MODE))),
-                    Integer.parseInt(getDefaultProp(JMS_PRIORITY, properties, String.valueOf(Message.DEFAULT_PRIORITY))),
-                    Long.parseLong(getDefaultProp(JMS_TTL, properties, String.valueOf(Message.DEFAULT_TIME_TO_LIVE))),
-                    Boolean.valueOf(getDefaultProp(JMS_MESSAGEID_ENABLED, properties, "true")).booleanValue(),
-                    Boolean.valueOf(getDefaultProp(JMS_TIMESTAMP_ENABLED, properties, "true")).booleanValue(),
-                    Boolean.valueOf(getDefaultProp(USE_THREAD_CONTEXT_CLASSLOADER, properties, "false")).booleanValue(),
-                    Integer.parseInt(getDefaultProp(INPUT_BUFFER_SIZE, properties, "131072")),
-                    Integer.parseInt(getDefaultProp(INPUT_EXTEND_SIZE, properties, "65536")),
-                    Integer.parseInt(getDefaultProp(OUTPUT_BUFFER_SIZE, properties, "131072")),
-                    Integer.parseInt(getDefaultProp(OUTPUT_EXTEND_SIZE, properties, "65536")),
-                    true);
-        } else {
-            cf = new com.swiftmq.jms.v630.ConnectionFactoryImpl(null,
-                    getMandatoryProp(SOCKETFACTORY, properties),
-                    getMandatoryProp(HOSTNAME, properties),
-                    Integer.parseInt(getMandatoryProp(PORT, properties)),
-                    Long.parseLong(getDefaultProp(KEEPALIVEINTERVAL, properties, "0")),
-                    getDefaultProp(CLIENTID, properties, null),
-                    Integer.parseInt(getDefaultProp(SMQP_PRODUCER_REPLY_INTERVAL, properties, "20")),
-                    Integer.parseInt(getDefaultProp(SMQP_CONSUMER_CACHE_SIZE, properties, "500")),
-                    Integer.parseInt(getDefaultProp(JMS_DELIVERY_MODE, properties, String.valueOf(Message.DEFAULT_DELIVERY_MODE))),
-                    Integer.parseInt(getDefaultProp(JMS_PRIORITY, properties, String.valueOf(Message.DEFAULT_PRIORITY))),
-                    Long.parseLong(getDefaultProp(JMS_TTL, properties, String.valueOf(Message.DEFAULT_TIME_TO_LIVE))),
-                    Boolean.valueOf(getDefaultProp(JMS_MESSAGEID_ENABLED, properties, "true")).booleanValue(),
-                    Boolean.valueOf(getDefaultProp(JMS_TIMESTAMP_ENABLED, properties, "true")).booleanValue(),
-                    Boolean.valueOf(getDefaultProp(USE_THREAD_CONTEXT_CLASSLOADER, properties, "false")).booleanValue(),
-                    Integer.parseInt(getDefaultProp(INPUT_BUFFER_SIZE, properties, "131072")),
-                    Integer.parseInt(getDefaultProp(INPUT_EXTEND_SIZE, properties, "65536")),
-                    Integer.parseInt(getDefaultProp(OUTPUT_BUFFER_SIZE, properties, "131072")),
-                    Integer.parseInt(getDefaultProp(OUTPUT_EXTEND_SIZE, properties, "65536")),
-                    false);
-            cf.setReconnectEnabled(Boolean.valueOf(getDefaultProp(RECONNECT_ENABLED, properties, "false")).booleanValue());
-            cf.setRetryDelay(Long.parseLong(getDefaultProp(RECONNECT_RETRY_DELAY, properties, "10000")));
-            cf.setMaxRetries(Integer.parseInt(getDefaultProp(RECONNECT_MAX_RETRIES, properties, "10")));
-            cf.setHostname2(getDefaultProp(RECONNECT_HOSTNAME2, properties, null));
-            cf.setPort2(Integer.parseInt(getDefaultProp(RECONNECT_PORT2, properties, "0")));
-            cf.setDuplicateMessageDetection(Boolean.valueOf(getDefaultProp(DUPLICATE_DETECTION_ENABLED, properties, "false")).booleanValue());
-            cf.setDuplicateBacklogSize(Integer.parseInt(getDefaultProp(DUPLICATE_BACKLOG_SIZE, properties, "30000")));
-        }
-        return cf;
-    }
 
     private static ConnectionFactory createV750CF(Map properties)
             throws Exception {
         boolean intraVM = false;
         String s = (String) properties.get(INTRAVM);
         if (s != null)
-            intraVM = Boolean.valueOf(s).booleanValue();
-        com.swiftmq.jms.v750.ConnectionFactoryImpl cf = null;
+            intraVM = Boolean.parseBoolean(s);
+        com.swiftmq.jms.v750.ConnectionFactoryImpl cf;
         if (intraVM) {
             cf = new com.swiftmq.jms.v750.ConnectionFactoryImpl(null,
                     null,
@@ -493,9 +140,9 @@ public class SwiftMQConnectionFactory {
                     Integer.parseInt(getDefaultProp(JMS_DELIVERY_MODE, properties, String.valueOf(Message.DEFAULT_DELIVERY_MODE))),
                     Integer.parseInt(getDefaultProp(JMS_PRIORITY, properties, String.valueOf(Message.DEFAULT_PRIORITY))),
                     Long.parseLong(getDefaultProp(JMS_TTL, properties, String.valueOf(Message.DEFAULT_TIME_TO_LIVE))),
-                    Boolean.valueOf(getDefaultProp(JMS_MESSAGEID_ENABLED, properties, "true")).booleanValue(),
-                    Boolean.valueOf(getDefaultProp(JMS_TIMESTAMP_ENABLED, properties, "true")).booleanValue(),
-                    Boolean.valueOf(getDefaultProp(USE_THREAD_CONTEXT_CLASSLOADER, properties, "false")).booleanValue(),
+                    Boolean.parseBoolean(getDefaultProp(JMS_MESSAGEID_ENABLED, properties, "true")),
+                    Boolean.parseBoolean(getDefaultProp(JMS_TIMESTAMP_ENABLED, properties, "true")),
+                    Boolean.parseBoolean(getDefaultProp(USE_THREAD_CONTEXT_CLASSLOADER, properties, "false")),
                     Integer.parseInt(getDefaultProp(INPUT_BUFFER_SIZE, properties, "131072")),
                     Integer.parseInt(getDefaultProp(INPUT_EXTEND_SIZE, properties, "65536")),
                     Integer.parseInt(getDefaultProp(OUTPUT_BUFFER_SIZE, properties, "131072")),
@@ -514,20 +161,20 @@ public class SwiftMQConnectionFactory {
                     Integer.parseInt(getDefaultProp(JMS_DELIVERY_MODE, properties, String.valueOf(Message.DEFAULT_DELIVERY_MODE))),
                     Integer.parseInt(getDefaultProp(JMS_PRIORITY, properties, String.valueOf(Message.DEFAULT_PRIORITY))),
                     Long.parseLong(getDefaultProp(JMS_TTL, properties, String.valueOf(Message.DEFAULT_TIME_TO_LIVE))),
-                    Boolean.valueOf(getDefaultProp(JMS_MESSAGEID_ENABLED, properties, "true")).booleanValue(),
-                    Boolean.valueOf(getDefaultProp(JMS_TIMESTAMP_ENABLED, properties, "true")).booleanValue(),
-                    Boolean.valueOf(getDefaultProp(USE_THREAD_CONTEXT_CLASSLOADER, properties, "false")).booleanValue(),
+                    Boolean.parseBoolean(getDefaultProp(JMS_MESSAGEID_ENABLED, properties, "true")),
+                    Boolean.parseBoolean(getDefaultProp(JMS_TIMESTAMP_ENABLED, properties, "true")),
+                    Boolean.parseBoolean(getDefaultProp(USE_THREAD_CONTEXT_CLASSLOADER, properties, "false")),
                     Integer.parseInt(getDefaultProp(INPUT_BUFFER_SIZE, properties, "131072")),
                     Integer.parseInt(getDefaultProp(INPUT_EXTEND_SIZE, properties, "65536")),
                     Integer.parseInt(getDefaultProp(OUTPUT_BUFFER_SIZE, properties, "131072")),
                     Integer.parseInt(getDefaultProp(OUTPUT_EXTEND_SIZE, properties, "65536")),
                     false);
-            cf.setReconnectEnabled(Boolean.valueOf(getDefaultProp(RECONNECT_ENABLED, properties, "false")).booleanValue());
+            cf.setReconnectEnabled(Boolean.parseBoolean(getDefaultProp(RECONNECT_ENABLED, properties, "false")));
             cf.setRetryDelay(Long.parseLong(getDefaultProp(RECONNECT_RETRY_DELAY, properties, "10000")));
             cf.setMaxRetries(Integer.parseInt(getDefaultProp(RECONNECT_MAX_RETRIES, properties, "10")));
             cf.setHostname2(getDefaultProp(RECONNECT_HOSTNAME2, properties, null));
             cf.setPort2(Integer.parseInt(getDefaultProp(RECONNECT_PORT2, properties, "0")));
-            cf.setDuplicateMessageDetection(Boolean.valueOf(getDefaultProp(DUPLICATE_DETECTION_ENABLED, properties, "false")).booleanValue());
+            cf.setDuplicateMessageDetection(Boolean.parseBoolean(getDefaultProp(DUPLICATE_DETECTION_ENABLED, properties, "false")));
             cf.setDuplicateBacklogSize(Integer.parseInt(getDefaultProp(DUPLICATE_BACKLOG_SIZE, properties, "30000")));
         }
         return cf;

@@ -223,7 +223,7 @@ public class EndpointImpl extends RequestServiceRegistry
     }
 
     public void authenticate(String password) throws Exception {
-        ChallengeResponseFactory crFactory = (ChallengeResponseFactory) Class.forName(connectReply.getCrFactory()).newInstance();
+        ChallengeResponseFactory crFactory = (ChallengeResponseFactory) Class.forName(connectReply.getCrFactory()).getDeclaredConstructor().newInstance();
         AuthReply reply = (AuthReply) request(new AuthRequest(crFactory.createResponse(connectReply.getChallenge(), password)));
         if (!reply.isOk())
             throw reply.getException();

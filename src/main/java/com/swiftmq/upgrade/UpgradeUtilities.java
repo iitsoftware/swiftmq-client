@@ -25,7 +25,7 @@ public class UpgradeUtilities {
     public static void checkRelease(String configFilename, Document routerConfig) throws Exception {
         if (upgrader == null) {
             try {
-                upgrader = (Upgrader) Class.forName("com.swiftmq.upgrade.UpgraderImpl").newInstance();
+                upgrader = (Upgrader) Class.forName("com.swiftmq.upgrade.UpgraderImpl").getDeclaredConstructor().newInstance();
             } catch (Exception e) {
             }
         }

@@ -229,7 +229,7 @@ public class ConnectionImpl extends RequestServiceRegistry
         }
         lastSecurityException = null;
         authReply = (GetAuthChallengeReply) reply;
-        crFactory = (ChallengeResponseFactory) Class.forName(authReply.getFactoryClass()).newInstance();
+        crFactory = (ChallengeResponseFactory) Class.forName(authReply.getFactoryClass()).getDeclaredConstructor().newInstance();
     }
 
     public Request getAuthenticateResponse() {

@@ -95,9 +95,9 @@ public class Versionable implements Dumpable, Serializable {
         } else {
             DumpableFactory factory = null;
             if (classLoader == null)
-                factory = (DumpableFactory) Class.forName(entry.factoryClass).newInstance();
+                factory = (DumpableFactory) Class.forName(entry.factoryClass).getDeclaredConstructor().newInstance();
             else
-                factory = (DumpableFactory) classLoader.loadClass(entry.factoryClass).newInstance();
+                factory = (DumpableFactory) classLoader.loadClass(entry.factoryClass).getDeclaredConstructor().newInstance();
             Dumpable d = factory.createDumpable(dis.readInt());
             d.readContent(dis);
             obj = d;

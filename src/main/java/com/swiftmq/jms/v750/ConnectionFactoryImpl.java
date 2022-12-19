@@ -310,7 +310,7 @@ public class ConnectionFactoryImpl
                 parameters.put(SwiftMQConnectionFactory.INPUT_EXTEND_SIZE, new Integer(inputExtendSize));
                 parameters.put(SwiftMQConnectionFactory.OUTPUT_BUFFER_SIZE, new Integer(outputBufferSize));
                 parameters.put(SwiftMQConnectionFactory.OUTPUT_EXTEND_SIZE, new Integer(outputExtendSize));
-                SocketFactory sf = (SocketFactory) Class.forName(socketFactoryClass).newInstance();
+                SocketFactory sf = (SocketFactory) Class.forName(socketFactoryClass).getDeclaredConstructor().newInstance();
                 if (sf instanceof SocketFactory2)
                     ((SocketFactory2) sf).setReceiveBufferSize(inputBufferSize);
                 parameters.put(SwiftMQConnectionFactory.SOCKETFACTORY, sf);

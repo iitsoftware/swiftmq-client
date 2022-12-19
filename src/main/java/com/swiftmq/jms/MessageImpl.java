@@ -1422,6 +1422,29 @@ public class MessageImpl implements Message, Serializable {
     public void reset() throws JMSException {
     }
 
+    /*
+     * JMS 2.0
+     */
+    @Override
+    public long getJMSDeliveryTime() throws JMSException {
+        return 0;
+    }
+
+    @Override
+    public void setJMSDeliveryTime(long l) throws JMSException {
+
+    }
+
+    @Override
+    public <T> T getBody(Class<T> aClass) throws JMSException {
+        return null;
+    }
+
+    @Override
+    public boolean isBodyAssignableTo(Class aClass) throws JMSException {
+        return false;
+    }
+
     public String toString() {
         StringBuffer s = new StringBuffer();
         s.append(super.toString());
