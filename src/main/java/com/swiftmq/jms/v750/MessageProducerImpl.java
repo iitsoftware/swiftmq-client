@@ -27,8 +27,8 @@ import com.swiftmq.tools.tracking.MessageTracker;
 import com.swiftmq.tools.util.DataByteArrayOutputStream;
 import com.swiftmq.tools.util.IdGenerator;
 
-import javax.jms.*;
 import javax.jms.IllegalStateException;
+import javax.jms.*;
 
 public class MessageProducerImpl implements MessageProducerExtended, RequestRetryValidator {
     private static final boolean ASYNC_SEND = Boolean.valueOf(System.getProperty("swiftmq.jms.persistent.asyncsend", "false")).booleanValue();
@@ -540,6 +540,39 @@ public class MessageProducerImpl implements MessageProducerExtended, RequestRetr
      */
     public void close() throws JMSException {
         _close(true);
+    }
+
+    /*
+     * TODO: JMS 2.0
+     */
+    @Override
+    public void setDeliveryDelay(long l) throws JMSException {
+
+    }
+
+    @Override
+    public long getDeliveryDelay() throws JMSException {
+        return 0;
+    }
+
+    @Override
+    public void send(Message message, CompletionListener completionListener) throws JMSException {
+
+    }
+
+    @Override
+    public void send(Message message, int i, int i1, long l, CompletionListener completionListener) throws JMSException {
+
+    }
+
+    @Override
+    public void send(Destination destination, Message message, CompletionListener completionListener) throws JMSException {
+
+    }
+
+    @Override
+    public void send(Destination destination, Message message, int i, int i1, long l, CompletionListener completionListener) throws JMSException {
+
     }
 }
 

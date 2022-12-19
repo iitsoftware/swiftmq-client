@@ -95,6 +95,29 @@ public class SingleSharedConnectionFactory
         }
     }
 
+    /*
+     * TODO: JMS 2.0
+     */
+    @Override
+    public JMSContext createContext() {
+        return null;
+    }
+
+    @Override
+    public JMSContext createContext(String s, String s1) {
+        return null;
+    }
+
+    @Override
+    public JMSContext createContext(String s, String s1, int i) {
+        return null;
+    }
+
+    @Override
+    public JMSContext createContext(int i) {
+        return null;
+    }
+
     public String toString() {
         return "/SingleSharedConnectionFactory";
     }

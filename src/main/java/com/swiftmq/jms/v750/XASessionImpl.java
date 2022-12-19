@@ -179,4 +179,37 @@ public class XASessionImpl implements XASession {
     Reply request(Request request) throws Exception {
         return session.requestBlockable(request);
     }
+
+    /*
+     * TODO: JMS 2.0
+     */
+    @Override
+    public MessageConsumer createSharedConsumer(Topic topic, String s) throws JMSException {
+        return null;
+    }
+
+    @Override
+    public MessageConsumer createSharedConsumer(Topic topic, String s, String s1) throws JMSException {
+        return null;
+    }
+
+    @Override
+    public MessageConsumer createDurableConsumer(Topic topic, String s) throws JMSException {
+        return null;
+    }
+
+    @Override
+    public MessageConsumer createDurableConsumer(Topic topic, String s, String s1, boolean b) throws JMSException {
+        return null;
+    }
+
+    @Override
+    public MessageConsumer createSharedDurableConsumer(Topic topic, String s) throws JMSException {
+        return null;
+    }
+
+    @Override
+    public MessageConsumer createSharedDurableConsumer(Topic topic, String s, String s1) throws JMSException {
+        return null;
+    }
 }

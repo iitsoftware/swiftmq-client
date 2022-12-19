@@ -143,6 +143,39 @@ public class PooledProducer
         internalProducer.send(topic, message, i, i1, l);
     }
 
+    /*
+     * TODO: JMS.2.0
+     */
+    @Override
+    public void setDeliveryDelay(long l) throws JMSException {
+
+    }
+
+    @Override
+    public long getDeliveryDelay() throws JMSException {
+        return 0;
+    }
+
+    @Override
+    public void send(Message message, CompletionListener completionListener) throws JMSException {
+
+    }
+
+    @Override
+    public void send(Message message, int i, int i1, long l, CompletionListener completionListener) throws JMSException {
+
+    }
+
+    @Override
+    public void send(Destination destination, Message message, CompletionListener completionListener) throws JMSException {
+
+    }
+
+    @Override
+    public void send(Destination destination, Message message, int i, int i1, long l, CompletionListener completionListener) throws JMSException {
+
+    }
+
     public String toString() {
         return "/PooledProducer, internalDestination=" + internalDestination;
     }

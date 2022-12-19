@@ -1,7 +1,7 @@
 package com.swiftmq.jms.springsupport;
 
-import javax.jms.*;
 import javax.jms.Queue;
+import javax.jms.*;
 import java.util.*;
 
 public class SharedJMSConnection
@@ -158,6 +158,29 @@ public class SharedJMSConnection
 
     public ConnectionConsumer createConnectionConsumer(Topic topic, String string, ServerSessionPool serverSessionPool, int i) throws JMSException {
         throw new javax.jms.IllegalStateException("SharedJMSConnection: operation is not supported!");
+    }
+
+    /*
+     * TODO: JMS.2.0
+     */
+    @Override
+    public Session createSession(int i) throws JMSException {
+        return null;
+    }
+
+    @Override
+    public Session createSession() throws JMSException {
+        return null;
+    }
+
+    @Override
+    public ConnectionConsumer createSharedConnectionConsumer(Topic topic, String s, String s1, ServerSessionPool serverSessionPool, int i) throws JMSException {
+        return null;
+    }
+
+    @Override
+    public ConnectionConsumer createSharedDurableConnectionConsumer(Topic topic, String s, String s1, ServerSessionPool serverSessionPool, int i) throws JMSException {
+        return null;
     }
 
     public String toString() {

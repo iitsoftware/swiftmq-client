@@ -32,9 +32,9 @@ import com.swiftmq.tools.requestreply.*;
 import com.swiftmq.tools.tracking.MessageTracker;
 import com.swiftmq.util.SwiftUtilities;
 
-import javax.jms.*;
 import javax.jms.IllegalStateException;
 import javax.jms.Queue;
+import javax.jms.*;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.Serializable;
@@ -1308,6 +1308,39 @@ public class SessionImpl
 
     public void serviceRequest(Request request) {
         sessionQueue.enqueue(request);
+    }
+
+    /*
+     * TODO: JMS 2.0
+     */
+    @Override
+    public MessageConsumer createSharedConsumer(Topic topic, String s) throws JMSException {
+        return null;
+    }
+
+    @Override
+    public MessageConsumer createSharedConsumer(Topic topic, String s, String s1) throws JMSException {
+        return null;
+    }
+
+    @Override
+    public MessageConsumer createDurableConsumer(Topic topic, String s) throws JMSException {
+        return null;
+    }
+
+    @Override
+    public MessageConsumer createDurableConsumer(Topic topic, String s, String s1, boolean b) throws JMSException {
+        return null;
+    }
+
+    @Override
+    public MessageConsumer createSharedDurableConsumer(Topic topic, String s) throws JMSException {
+        return null;
+    }
+
+    @Override
+    public MessageConsumer createSharedDurableConsumer(Topic topic, String s, String s1) throws JMSException {
+        return null;
     }
 
     private class SessionDeliveryQueue extends SingleProcessorQueue {
