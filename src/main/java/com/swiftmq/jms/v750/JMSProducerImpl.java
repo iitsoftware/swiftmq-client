@@ -1,228 +1,424 @@
 package com.swiftmq.jms.v750;
 
-import javax.jms.CompletionListener;
-import javax.jms.Destination;
-import javax.jms.JMSProducer;
-import javax.jms.Message;
+import com.swiftmq.jms.MessageImpl;
+
+import javax.jms.*;
 import java.io.Serializable;
+import java.util.Enumeration;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
 public class JMSProducerImpl implements JMSProducer {
+    MessageProducerImpl producer;
+    CompletionListener completionListener = null;
+    MessageImpl properties = new MessageImpl();
+
+    public JMSProducerImpl(MessageProducerImpl producer) {
+        this.producer = producer;
+    }
 
     @Override
     public JMSProducer setDisableMessageID(boolean b) {
-        return null;
+        try {
+            producer.setDisableMessageID(b);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
+        return this;
     }
 
     @Override
     public boolean getDisableMessageID() {
-        return false;
+        try {
+            return producer.getDisableMessageID();
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
     }
 
     @Override
     public JMSProducer setDisableMessageTimestamp(boolean b) {
-        return null;
+        try {
+            producer.setDisableMessageTimestamp(b);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
+        return this;
     }
 
     @Override
     public boolean getDisableMessageTimestamp() {
-        return false;
+        try {
+            return producer.getDisableMessageTimestamp();
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
     }
 
     @Override
     public JMSProducer setDeliveryMode(int i) {
-        return null;
+        try {
+            producer.setDeliveryMode(i);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
+        return this;
     }
 
     @Override
     public int getDeliveryMode() {
-        return 0;
+        try {
+            return producer.getDeliveryMode();
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
     }
 
     @Override
     public JMSProducer setPriority(int i) {
-        return null;
+        try {
+            producer.setPriority(i);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
+        return this;
     }
 
     @Override
     public int getPriority() {
-        return 0;
+        try {
+            return producer.getPriority();
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
     }
 
     @Override
     public JMSProducer setTimeToLive(long l) {
-        return null;
+        try {
+            producer.setTimeToLive(l);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
+        return this;
     }
 
     @Override
     public long getTimeToLive() {
-        return 0;
+        try {
+            return producer.getTimeToLive();
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
     }
 
     @Override
     public JMSProducer setDeliveryDelay(long l) {
-        return null;
+        try {
+            producer.setDeliveryDelay(l);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
+        return this;
     }
 
     @Override
     public long getDeliveryDelay() {
-        return 0;
+        try {
+            return producer.getDeliveryDelay();
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
     }
 
     @Override
     public JMSProducer setAsync(CompletionListener completionListener) {
-        return null;
+        this.completionListener = completionListener;
+        return this;
     }
 
     @Override
     public CompletionListener getAsync() {
-        return null;
+        return completionListener;
     }
 
     @Override
     public JMSProducer setProperty(String s, boolean b) {
-        return null;
+        try {
+            properties.setBooleanProperty(s, b);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
+        return this;
     }
 
     @Override
     public JMSProducer setProperty(String s, byte b) {
-        return null;
+        try {
+            properties.setByteProperty(s, b);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
+        return this;
     }
 
     @Override
     public JMSProducer setProperty(String s, short i) {
-        return null;
+        try {
+            properties.setShortProperty(s, i);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
+        return this;
     }
 
     @Override
     public JMSProducer setProperty(String s, int i) {
-        return null;
+        try {
+            properties.setIntProperty(s, i);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
+        return this;
     }
 
     @Override
     public JMSProducer setProperty(String s, long l) {
-        return null;
+        try {
+            properties.setLongProperty(s, l);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
+        return this;
     }
 
     @Override
     public JMSProducer setProperty(String s, float v) {
-        return null;
+        try {
+            properties.setFloatProperty(s, v);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
+        return this;
     }
 
     @Override
     public JMSProducer setProperty(String s, double v) {
-        return null;
+        try {
+            properties.setDoubleProperty(s, v);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
+        return this;
     }
 
     @Override
-    public JMSProducer setProperty(String s, String s1) {
-        return null;
+    public JMSProducer setProperty(String s, String v) {
+        try {
+            properties.setStringProperty(s, v);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
+        return this;
     }
 
     @Override
     public JMSProducer setProperty(String s, Object o) {
-        return null;
+        try {
+            properties.setObjectProperty(s, o);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
+        return this;
     }
 
     @Override
     public JMSProducer clearProperties() {
-        return null;
+        try {
+            properties.clearProperties();
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
+        return this;
     }
 
     @Override
     public boolean propertyExists(String s) {
-        return false;
+        try {
+            return properties.propertyExists(s);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
     }
 
     @Override
     public boolean getBooleanProperty(String s) {
-        return false;
+        try {
+            return properties.getBooleanProperty(s);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
     }
 
     @Override
     public byte getByteProperty(String s) {
-        return 0;
+        try {
+            return properties.getByteProperty(s);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
     }
 
     @Override
     public short getShortProperty(String s) {
-        return 0;
+        try {
+            return properties.getShortProperty(s);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
     }
 
     @Override
     public int getIntProperty(String s) {
-        return 0;
+        try {
+            return properties.getIntProperty(s);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
     }
 
     @Override
     public long getLongProperty(String s) {
-        return 0;
+        try {
+            return properties.getLongProperty(s);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
     }
 
     @Override
     public float getFloatProperty(String s) {
-        return 0;
+        try {
+            return properties.getFloatProperty(s);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
     }
 
     @Override
     public double getDoubleProperty(String s) {
-        return 0;
+        try {
+            return properties.getDoubleProperty(s);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
     }
 
     @Override
     public String getStringProperty(String s) {
-        return null;
+        try {
+            return properties.getStringProperty(s);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
     }
 
     @Override
     public Object getObjectProperty(String s) {
-        return null;
+        try {
+            return properties.getObjectProperty(s);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
     }
 
     @Override
     public Set<String> getPropertyNames() {
-        return null;
+        try {
+            Set<String> result = new HashSet<>();
+            for (Enumeration names = properties.getPropertyNames(); names.hasMoreElements(); )
+                result.add((String) names.nextElement());
+            return result;
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
     }
 
     @Override
     public JMSProducer setJMSCorrelationIDAsBytes(byte[] bytes) {
-        return null;
+        try {
+            properties.setJMSCorrelationIDAsBytes(bytes);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
+        return this;
     }
 
     @Override
     public byte[] getJMSCorrelationIDAsBytes() {
-        return new byte[0];
+        try {
+            return properties.getJMSCorrelationIDAsBytes();
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
     }
 
     @Override
     public JMSProducer setJMSCorrelationID(String s) {
-        return null;
+        try {
+            properties.setJMSCorrelationID(s);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
+        return this;
     }
 
     @Override
     public String getJMSCorrelationID() {
-        return null;
+        try {
+            return properties.getJMSCorrelationID();
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
     }
 
     @Override
     public JMSProducer setJMSType(String s) {
-        return null;
+        try {
+            properties.setJMSType(s);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
+        return this;
     }
 
     @Override
     public String getJMSType() {
-        return null;
+        try {
+            return properties.getJMSType();
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
     }
 
     @Override
     public JMSProducer setJMSReplyTo(Destination destination) {
-        return null;
+        try {
+            properties.setJMSReplyTo(destination);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
+        return this;
     }
 
     @Override
     public Destination getJMSReplyTo() {
-        return null;
+        try {
+            return properties.getJMSReplyTo();
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
     }
 
     @Override

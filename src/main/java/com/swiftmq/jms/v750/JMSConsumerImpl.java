@@ -1,11 +1,12 @@
 package com.swiftmq.jms.v750;
 
+
 import javax.jms.*;
 
 public class JMSConsumerImpl implements JMSConsumer {
-    MessageConsumer consumer;
+    MessageConsumerImpl consumer;
 
-    public JMSConsumerImpl(MessageConsumer consumer) {
+    public JMSConsumerImpl(MessageConsumerImpl consumer) {
         this.consumer = consumer;
     }
 
