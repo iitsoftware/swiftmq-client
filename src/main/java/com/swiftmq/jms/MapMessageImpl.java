@@ -27,7 +27,10 @@ import javax.jms.MessageNotWriteableException;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Implementation of a MapMessage.
@@ -493,13 +496,30 @@ public class MapMessageImpl extends MessageImpl implements MapMessage {
         bodyReadOnly = false;
     }
 
+    @Override
+    public <T> T getBody(Class<T> aClass) throws JMSException {
+        if (!isBodyAssignableTo(aClass))
+            throw new MessageFormatException("Message body is not assignable to class: " + aClass.getName());
+        Map<String, Object> result = new HashMap<>();
+        for (Enumeration names = getMapNames(); names.hasMoreElements(); ) {
+            String name = (String) names.nextElement();
+            result.put(name, getObject(name));
+        }
+        return (T) result;
+    }
+
+    @Override
+    public boolean isBodyAssignableTo(Class aClass) throws JMSException {
+        return aClass.isAssignableFrom(Map.class) || aClass.isAssignableFrom(Object.class);
+    }
+
     public String toString() {
         StringBuffer b = new StringBuffer("[MapMessageImpl ");
         b.append(super.toString());
         b.append(" map=");
         b.append(map);
         b.append(" mapBytes=");
-        b.append(mapBytes);
+        b.append(Arrays.toString(mapBytes));
         b.append("]");
         return b.toString();
     }

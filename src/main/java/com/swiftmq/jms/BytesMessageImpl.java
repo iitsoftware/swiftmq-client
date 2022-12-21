@@ -812,6 +812,22 @@ public class BytesMessageImpl extends MessageImpl implements BytesMessage {
         cnt = 0;
     }
 
+    @Override
+    public <T> T getBody(Class<T> aClass) throws JMSException {
+        if (!isBodyAssignableTo(aClass))
+            throw new MessageFormatException("Message body is not assignable to class: " + aClass.getName());
+        reset();
+        byte[] b = new byte[(int) getBodyLength()];
+        readBytes(b);
+        reset();
+        return (T) b;
+    }
+
+    @Override
+    public boolean isBodyAssignableTo(Class aClass) throws JMSException {
+        return aClass.isAssignableFrom(byte[].class);
+    }
+
     public String toString() {
         StringBuffer b = new StringBuffer("[BytesMessageImpl ");
         b.append(super.toString());

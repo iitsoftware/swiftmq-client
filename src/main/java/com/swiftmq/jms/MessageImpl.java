@@ -76,6 +76,7 @@ public class MessageImpl implements Message, Serializable {
     transient long messageLength = -1;
     transient volatile Object persistentKey = null;
     transient volatile Object streamPKey = null;
+    transient volatile long deliveryTime = 0;
 
     // Routing
     LazyUTF8String sourceRouter = null;
@@ -1427,16 +1428,18 @@ public class MessageImpl implements Message, Serializable {
      */
     @Override
     public long getJMSDeliveryTime() throws JMSException {
-        return 0;
+        return deliveryTime;
     }
 
     @Override
-    public void setJMSDeliveryTime(long l) throws JMSException {
-
+    public void setJMSDeliveryTime(long deliveryTime) throws JMSException {
+        this.deliveryTime = deliveryTime;
     }
 
     @Override
     public <T> T getBody(Class<T> aClass) throws JMSException {
+        if (!isBodyAssignableTo(aClass))
+            throw new MessageFormatException("Message body is not assignable to class: " + aClass.getName());
         return null;
     }
 
