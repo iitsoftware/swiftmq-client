@@ -53,6 +53,8 @@ public class MessageProducerImpl implements MessageProducerExtended, RequestRetr
     DestinationImpl destImpl = null;
     String clientId = null;
     DataByteArrayOutputStream dbos = new DataByteArrayOutputStream(2048);
+    // JMS 2.0
+    long deliveryDelay = 0;
 
     public MessageProducerImpl(SessionImpl mySession, int producerId,
                                RequestRegistry requestRegistry,
@@ -262,81 +264,19 @@ public class MessageProducerImpl implements MessageProducerExtended, RequestRetr
     }
 
     public void send(Message message) throws JMSException {
-        verifyState();
-
-        if (this.destImpl == null)
-            throw new UnsupportedOperationException("Cannot send unidentified on an unidentified MessageProducer!");
-
-        Message msg = initMessageForSend(message);
-        msg.setJMSDestination(destImpl);
-        // TCK: Foreign messages
-        if (msg != message)
-            message.setJMSDestination(destImpl);
-        if (isTopicDestination() && clientId != null)
-            msg.setStringProperty(MessageImpl.PROP_CLIENT_ID, clientId);
-        processSend(producerId, msg);
+        send(message, null);
     }
 
     public void send(Message message, int deliveryMode, int priority, long ttl) throws JMSException {
-        verifyState();
-
-        if (this.destImpl == null)
-            throw new UnsupportedOperationException("Cannot send unidentified on an unidentified MessageProducer!");
-
-        Message msg = initMessageForSend(message);
-        msg.setJMSDeliveryMode(deliveryMode);
-        msg.setJMSPriority(priority);
-        msg.setJMSExpiration(ttl);
-        msg.setJMSDestination(destImpl);
-        // TCK: Foreign message
-        if (msg != message) {
-            message.setJMSDeliveryMode(deliveryMode);
-            message.setJMSPriority(priority);
-            message.setJMSExpiration(ttl);
-            message.setJMSDestination(destImpl);
-        }
-        if (isTopicDestination() && clientId != null)
-            msg.setStringProperty(MessageImpl.PROP_CLIENT_ID, clientId);
-        processSend(producerId, msg);
+        send(message, deliveryMode, priority, ttl, null);
     }
 
     public void send(Destination dest, Message message) throws JMSException {
-        verifyState();
-
-        if (this.destImpl != null)
-            throw new UnsupportedOperationException("This send method is only supported for unidentified MessageProducer!");
-
-        Message msg = initMessageForSend(message);
-        msg.setJMSDestination(dest);
-        // TCK: Foreign message
-        if (msg != message)
-            message.setJMSDestination(dest);
-        if (isTopicDestination((DestinationImpl) dest) && clientId != null)
-            msg.setStringProperty(MessageImpl.PROP_CLIENT_ID, clientId);
-        processSend(-1, msg);
+        send(dest, message, null);
     }
 
     public void send(Destination dest, Message message, int deliveryMode, int priority, long ttl) throws JMSException {
-        verifyState();
-
-        if (this.destImpl != null)
-            throw new UnsupportedOperationException("This send method is only supported for unidentified MessageProducer!");
-
-        Message msg = initMessageForSend(message);
-        msg.setJMSDeliveryMode(deliveryMode);
-        msg.setJMSPriority(priority);
-        msg.setJMSExpiration(ttl);
-        msg.setJMSDestination(dest);
-        // TCK: Foreign message
-        if (msg != message) {
-            message.setJMSDeliveryMode(deliveryMode);
-            message.setJMSPriority(priority);
-            message.setJMSExpiration(ttl);
-            message.setJMSDestination(dest);
-        }
-        if (isTopicDestination((DestinationImpl) dest) && clientId != null)
-            msg.setStringProperty(MessageImpl.PROP_CLIENT_ID, clientId);
-        processSend(-1, msg);
+        send(dest, message, deliveryMode, priority, ttl, null);
     }
     // <-- JMS 1.1
 
@@ -546,33 +486,95 @@ public class MessageProducerImpl implements MessageProducerExtended, RequestRetr
      * TODO: JMS 2.0
      */
     @Override
-    public void setDeliveryDelay(long l) throws JMSException {
-
+    public void setDeliveryDelay(long deliveryDelay) throws JMSException {
+        this.deliveryDelay = deliveryDelay;
     }
 
     @Override
     public long getDeliveryDelay() throws JMSException {
-        return 0;
+        return deliveryDelay;
     }
 
     @Override
     public void send(Message message, CompletionListener completionListener) throws JMSException {
+        verifyState();
 
+        if (this.destImpl == null)
+            throw new UnsupportedOperationException("Cannot send unidentified on an unidentified MessageProducer!");
+
+        Message msg = initMessageForSend(message);
+        msg.setJMSDestination(destImpl);
+        // TCK: Foreign messages
+        if (msg != message)
+            message.setJMSDestination(destImpl);
+        if (isTopicDestination() && clientId != null)
+            msg.setStringProperty(MessageImpl.PROP_CLIENT_ID, clientId);
+        processSend(producerId, msg);
     }
 
     @Override
-    public void send(Message message, int i, int i1, long l, CompletionListener completionListener) throws JMSException {
+    public void send(Message message, int deliveryMode, int priority, long ttl, CompletionListener completionListener) throws JMSException {
+        verifyState();
 
+        if (this.destImpl == null)
+            throw new UnsupportedOperationException("Cannot send unidentified on an unidentified MessageProducer!");
+
+        Message msg = initMessageForSend(message);
+        msg.setJMSDeliveryMode(deliveryMode);
+        msg.setJMSPriority(priority);
+        msg.setJMSExpiration(ttl);
+        msg.setJMSDestination(destImpl);
+        // TCK: Foreign message
+        if (msg != message) {
+            message.setJMSDeliveryMode(deliveryMode);
+            message.setJMSPriority(priority);
+            message.setJMSExpiration(ttl);
+            message.setJMSDestination(destImpl);
+        }
+        if (isTopicDestination() && clientId != null)
+            msg.setStringProperty(MessageImpl.PROP_CLIENT_ID, clientId);
+        processSend(producerId, msg);
     }
 
     @Override
-    public void send(Destination destination, Message message, CompletionListener completionListener) throws JMSException {
+    public void send(Destination dest, Message message, CompletionListener completionListener) throws JMSException {
+        verifyState();
 
+        if (this.destImpl != null)
+            throw new UnsupportedOperationException("This send method is only supported for unidentified MessageProducer!");
+
+        Message msg = initMessageForSend(message);
+        msg.setJMSDestination(dest);
+        // TCK: Foreign message
+        if (msg != message)
+            message.setJMSDestination(dest);
+        if (isTopicDestination((DestinationImpl) dest) && clientId != null)
+            msg.setStringProperty(MessageImpl.PROP_CLIENT_ID, clientId);
+        processSend(-1, msg);
     }
 
     @Override
-    public void send(Destination destination, Message message, int i, int i1, long l, CompletionListener completionListener) throws JMSException {
+    public void send(Destination dest, Message message, int deliveryMode, int priority, long ttl, CompletionListener completionListener) throws JMSException {
+        verifyState();
 
+        if (this.destImpl != null)
+            throw new UnsupportedOperationException("This send method is only supported for unidentified MessageProducer!");
+
+        Message msg = initMessageForSend(message);
+        msg.setJMSDeliveryMode(deliveryMode);
+        msg.setJMSPriority(priority);
+        msg.setJMSExpiration(ttl);
+        msg.setJMSDestination(dest);
+        // TCK: Foreign message
+        if (msg != message) {
+            message.setJMSDeliveryMode(deliveryMode);
+            message.setJMSPriority(priority);
+            message.setJMSExpiration(ttl);
+            message.setJMSDestination(dest);
+        }
+        if (isTopicDestination((DestinationImpl) dest) && clientId != null)
+            msg.setStringProperty(MessageImpl.PROP_CLIENT_ID, clientId);
+        processSend(-1, msg);
     }
 }
 

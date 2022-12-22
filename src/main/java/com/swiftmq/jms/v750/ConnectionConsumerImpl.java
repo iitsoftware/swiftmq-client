@@ -236,7 +236,6 @@ public abstract class ConnectionConsumerImpl
             }
         } catch (Exception e) {
             e.printStackTrace();
-            // TODO: Handle it some way like InvalidateConsumerRequest!!!
         }
         if (request.isRequiresRestart())
             fillCache();

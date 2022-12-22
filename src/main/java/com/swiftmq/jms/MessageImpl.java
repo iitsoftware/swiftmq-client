@@ -1424,7 +1424,7 @@ public class MessageImpl implements Message, Serializable {
     }
 
     /*
-     * TODO: JMS.2.0
+     * JMS.2.0
      */
     @Override
     public long getJMSDeliveryTime() throws JMSException {

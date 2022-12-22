@@ -144,36 +144,36 @@ public class PooledProducer
     }
 
     /*
-     * TODO: JMS.2.0
+     * JMS.2.0
      */
     @Override
     public void setDeliveryDelay(long l) throws JMSException {
-
+        internalProducer.setDeliveryDelay(l);
     }
 
     @Override
     public long getDeliveryDelay() throws JMSException {
-        return 0;
+        return internalProducer.getDeliveryDelay();
     }
 
     @Override
     public void send(Message message, CompletionListener completionListener) throws JMSException {
-
+        internalProducer.send(message, completionListener);
     }
 
     @Override
     public void send(Message message, int i, int i1, long l, CompletionListener completionListener) throws JMSException {
-
+        internalProducer.send(message, i, i1, l, completionListener);
     }
 
     @Override
     public void send(Destination destination, Message message, CompletionListener completionListener) throws JMSException {
-
+        internalProducer.send(destination, message, completionListener);
     }
 
     @Override
     public void send(Destination destination, Message message, int i, int i1, long l, CompletionListener completionListener) throws JMSException {
-
+        internalProducer.send(destination, message, i, i1, l, completionListener);
     }
 
     public String toString() {
