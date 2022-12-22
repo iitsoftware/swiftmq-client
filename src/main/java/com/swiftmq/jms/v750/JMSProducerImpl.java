@@ -1,6 +1,6 @@
 package com.swiftmq.jms.v750;
 
-import com.swiftmq.jms.MessageImpl;
+import com.swiftmq.jms.*;
 
 import javax.jms.*;
 import java.io.Serializable;
@@ -421,28 +421,86 @@ public class JMSProducerImpl implements JMSProducer {
         }
     }
 
+    private void setHeaderAndProps(Message message) {
+        try {
+            // Header
+            message.setJMSCorrelationID(properties.getJMSCorrelationID());
+            message.setJMSType(properties.getJMSType());
+            message.setJMSReplyTo(properties.getJMSReplyTo());
+
+            // Properties
+            for (Enumeration names = properties.getPropertyNames(); names.hasMoreElements(); ) {
+                String name = (String) names.nextElement();
+                message.setObjectProperty(name, properties.getObjectProperty(name));
+            }
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
+    }
+
     @Override
     public JMSProducer send(Destination destination, Message message) {
-        return null;
+        setHeaderAndProps(message);
+        try {
+            if (completionListener != null)
+                producer.send(destination, message, completionListener);
+            else
+                producer.send(destination, message);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
+        return this;
     }
 
     @Override
     public JMSProducer send(Destination destination, String s) {
-        return null;
+        TextMessage textMessage = new TextMessageImpl();
+        try {
+            textMessage.setText(s);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
+        send(destination, textMessage);
+        return this;
     }
 
     @Override
     public JMSProducer send(Destination destination, Map<String, Object> map) {
-        return null;
+        MapMessage mapMessage = new MapMessageImpl();
+        for (Map.Entry<String, Object> entry : map.entrySet()) {
+            String key = entry.getKey();
+            Object value = entry.getValue();
+            try {
+                mapMessage.setObject(key, value);
+            } catch (JMSException e) {
+                throw new JMSRuntimeException(e.getMessage());
+            }
+        }
+        send(destination, mapMessage);
+        return this;
     }
 
     @Override
     public JMSProducer send(Destination destination, byte[] bytes) {
-        return null;
+        BytesMessage bytesMessage = new BytesMessageImpl();
+        try {
+            bytesMessage.writeBytes(bytes);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
+        send(destination, bytesMessage);
+        return this;
     }
 
     @Override
     public JMSProducer send(Destination destination, Serializable serializable) {
-        return null;
+        ObjectMessage objectMessage = new ObjectMessageImpl();
+        try {
+            objectMessage.setObject(serializable);
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
+        send(destination, objectMessage);
+        return this;
     }
 }
