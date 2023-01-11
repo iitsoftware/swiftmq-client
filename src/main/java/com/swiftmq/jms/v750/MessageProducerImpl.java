@@ -29,9 +29,11 @@ import com.swiftmq.tools.util.IdGenerator;
 
 import javax.jms.IllegalStateException;
 import javax.jms.*;
+import java.text.SimpleDateFormat;
 
 public class MessageProducerImpl implements MessageProducerExtended, RequestRetryValidator {
     private static final boolean ASYNC_SEND = Boolean.valueOf(System.getProperty("swiftmq.jms.persistent.asyncsend", "false")).booleanValue();
+    private static final SimpleDateFormat DELAY_FORMAT = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss");
     public volatile int producerId = -1;
     boolean closed = false;
     RequestRegistry requestRegistry = null;
@@ -157,6 +159,7 @@ public class MessageProducerImpl implements MessageProducerExtended, RequestRetr
             message.setJMSDeliveryMode(deliveryMode);
             message.setJMSPriority(priority);
             message.setJMSExpiration(timeToLive);
+            message.setJMSDeliveryTime(System.currentTimeMillis() + deliveryDelay);
         }
 
         if (!disableTimestamp) {
@@ -181,15 +184,28 @@ public class MessageProducerImpl implements MessageProducerExtended, RequestRetr
         return msg;
     }
 
-    void processSend(int producerId, Message message) throws JMSException {
+    MessageImpl rerouteScheduler(MessageImpl msg, DestinationImpl destImpl) throws JMSException {
+        msg.setStringProperty("streams_scheduler_delay", DELAY_FORMAT.format(System.currentTimeMillis() + deliveryDelay));
+        msg.setStringProperty("streams_scheduler_destination", destImpl.toString());
+        msg.setStringProperty("streams_scheduler_destination_type", isTopicDestination(destImpl) ? "topic" : "queue");
+        if (msg.getJMSExpiration() > 0)
+            msg.setLongProperty("streams_scheduler_expiration", msg.getJMSExpiration());
+        msg.setJMSDestination(new QueueImpl("streams_scheduler_inout"));
+        return msg;
+    }
+
+    void processSend(int producerId, Message message, CompletionListener completionListener) throws JMSException {
         boolean transacted = mySession.getTransacted();
         MessageImpl msg = (MessageImpl) message;
+        // JMS 2.0
+        if (deliveryDelay > 0)
+            msg = rerouteScheduler(msg, (DestinationImpl) message.getJMSDestination());
 
         if (transacted) {
             if (MessageTracker.enabled) {
                 MessageTracker.getInstance().track((MessageImpl) msg, new String[]{mySession.myConnection.toString(), mySession.toString(), toString()}, "processSend, storeTransactedMessage");
             }
-            mySession.storeTransactedMessage(this, msg);
+            mySession.storeTransactedMessage(this, msg, completionListener);
         } else {
             nSend++;
             ProduceMessageReply reply = null;
@@ -207,6 +223,7 @@ public class MessageProducerImpl implements MessageProducerExtended, RequestRetr
                     request = new ProduceMessageRequest(this, mySession.dispatchId, producerId, null, b);
                 } else
                     request = new ProduceMessageRequest(this, mySession.dispatchId, producerId, msg, null);
+
                 request.setReplyRequired(replyRequired);
                 if (MessageTracker.enabled) {
                     MessageTracker.getInstance().track((MessageImpl) msg, new String[]{mySession.myConnection.toString(), mySession.toString(), toString()}, "processSend ...");
@@ -219,15 +236,22 @@ public class MessageProducerImpl implements MessageProducerExtended, RequestRetr
                 if (MessageTracker.enabled) {
                     MessageTracker.getInstance().track((MessageImpl) msg, new String[]{mySession.myConnection.toString(), mySession.toString(), toString()}, "processSend, exception=" + e);
                 }
-                e.printStackTrace();
+                if (completionListener != null)
+                    Completioner.instance().complete(msg, e, completionListener);
                 throw ExceptionConverter.convert(e);
             }
 
             if (replyRequired) {
-                if (reply == null)
-                    throw new JMSException("Request was cancelled (reply == null)");
+                if (reply == null) {
+                    JMSException e = new JMSException("Request was cancelled (reply == null)");
+                    if (completionListener != null)
+                        Completioner.instance().complete(msg, e, completionListener);
+                    throw e;
+                }
                 nSend = 0;
                 if (!reply.isOk()) {
+                    if (completionListener != null)
+                        Completioner.instance().complete(msg, reply.getException(), completionListener);
                     throw ExceptionConverter.convert(reply.getException());
                 }
                 currentDelay = reply.getDelay();
@@ -237,6 +261,8 @@ public class MessageProducerImpl implements MessageProducerExtended, RequestRetr
                     } catch (Exception ignored) {
                     }
                 }
+                if (completionListener != null)
+                    Completioner.instance().complete(msg, completionListener);
             }
         }
         // fix 1.2
@@ -483,7 +509,7 @@ public class MessageProducerImpl implements MessageProducerExtended, RequestRetr
     }
 
     /*
-     * TODO: JMS 2.0
+     * JMS 2.0
      */
     @Override
     public void setDeliveryDelay(long deliveryDelay) throws JMSException {
@@ -509,7 +535,7 @@ public class MessageProducerImpl implements MessageProducerExtended, RequestRetr
             message.setJMSDestination(destImpl);
         if (isTopicDestination() && clientId != null)
             msg.setStringProperty(MessageImpl.PROP_CLIENT_ID, clientId);
-        processSend(producerId, msg);
+        processSend(producerId, msg, completionListener);
     }
 
     @Override
@@ -533,7 +559,7 @@ public class MessageProducerImpl implements MessageProducerExtended, RequestRetr
         }
         if (isTopicDestination() && clientId != null)
             msg.setStringProperty(MessageImpl.PROP_CLIENT_ID, clientId);
-        processSend(producerId, msg);
+        processSend(producerId, msg, completionListener);
     }
 
     @Override
@@ -550,7 +576,7 @@ public class MessageProducerImpl implements MessageProducerExtended, RequestRetr
             message.setJMSDestination(dest);
         if (isTopicDestination((DestinationImpl) dest) && clientId != null)
             msg.setStringProperty(MessageImpl.PROP_CLIENT_ID, clientId);
-        processSend(-1, msg);
+        processSend(-1, msg, completionListener);
     }
 
     @Override
@@ -574,7 +600,7 @@ public class MessageProducerImpl implements MessageProducerExtended, RequestRetr
         }
         if (isTopicDestination((DestinationImpl) dest) && clientId != null)
             msg.setStringProperty(MessageImpl.PROP_CLIENT_ID, clientId);
-        processSend(-1, msg);
+        processSend(-1, msg, completionListener);
     }
 }
 

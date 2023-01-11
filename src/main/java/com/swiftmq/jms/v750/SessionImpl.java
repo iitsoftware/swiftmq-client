@@ -64,7 +64,8 @@ public class SessionImpl
     List producers = new ArrayList();
     List browsers = new ArrayList();
     int lastConsumerId = -1;
-    ArrayList transactedRequestList = new ArrayList();
+    final ArrayList transactedRequestList = new ArrayList();
+    final List completionListeners = new ArrayList();
     Set rollbackIdLog = new HashSet();
     Set currentTxLog = new HashSet();
     MessageListener messageListener = null;
@@ -282,7 +283,7 @@ public class SessionImpl
         this.ignoreClose = ignoreClose;
     }
 
-    public void storeTransactedMessage(MessageProducerImpl producer, MessageImpl msg) {
+    public void storeTransactedMessage(MessageProducerImpl producer, MessageImpl msg, CompletionListener completionListener) {
         synchronized (transactedRequestList) {
             minConnectionId = Math.min(minConnectionId, myConnection.getConnectionId());
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -294,6 +295,11 @@ public class SessionImpl
             }
             transactedRequestList.add(new Object[]{producer, bos.toByteArray()});
         }
+        if (completionListener != null) {
+            synchronized (completionListener) {
+                completionListeners.add(new Object[]{msg, completionListener});
+            }
+        }
     }
 
     public Reply requestTransaction(CommitRequest req) {
@@ -303,6 +309,20 @@ public class SessionImpl
         }
 
         return requestRegistry.request(req);
+    }
+
+    public void invokeCompletionListeners() {
+        synchronized (completionListeners) {
+            completionListeners.forEach(o -> Completioner.instance().complete((MessageImpl) ((Object[]) o)[0], (CompletionListener) ((Object[]) o)[1]));
+            completionListeners.clear();
+        }
+    }
+
+    public void invokeCompletionListeners(Exception e) {
+        synchronized (completionListeners) {
+            completionListeners.forEach(o -> Completioner.instance().complete((MessageImpl) ((Object[]) o)[0], e, (CompletionListener) ((Object[]) o)[1]));
+            completionListeners.clear();
+        }
     }
 
     public int getMinConnectionId() {
@@ -836,10 +856,12 @@ public class SessionImpl
                 reply = (CommitReply) requestTransaction(req);
                 txCancelled = req.isCancelledByValidator() || req.isWasRetry();
             } catch (Exception e) {
+                invokeCompletionListeners(e);
                 throw ExceptionConverter.convert(e);
             }
 
             if (!reply.isOk()) {
+                invokeCompletionListeners(reply.getException());
                 throw ExceptionConverter.convert(reply.getException());
             }
             afterCommit();
@@ -851,6 +873,7 @@ public class SessionImpl
                 } catch (Exception ignored) {
                 }
             }
+            invokeCompletionListeners();
         } else {
             throw new javax.jms.IllegalStateException("Session is not transacted - commit not allowed");
         }
