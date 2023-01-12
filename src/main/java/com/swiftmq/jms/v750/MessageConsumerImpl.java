@@ -61,6 +61,8 @@ public class MessageConsumerImpl implements MessageConsumer, SwiftMQMessageConsu
     boolean consumerStarted = false;
     Lock fillCacheLock = new ReentrantLock();
 
+    JMSContextImpl jmsContext = null;
+
     public MessageConsumerImpl(boolean transacted, int acknowledgeMode, RequestRegistry requestRegistry,
                                String messageSelector, SessionImpl session) {
         this.transacted = transacted;
@@ -71,6 +73,10 @@ public class MessageConsumerImpl implements MessageConsumer, SwiftMQMessageConsu
         useThreadContextCL = mySession.getMyConnection().isUseThreadContextCL();
         reportDelivered = transacted || acknowledgeMode == Session.CLIENT_ACKNOWLEDGE;
         messageCache = new RingBufferThreadsafe(mySession.getMyConnection().getSmqpConsumerCacheSize());
+    }
+
+    public void setJmsContext(JMSContextImpl jmsContext) {
+        this.jmsContext = jmsContext;
     }
 
     public Request getRecreateRequest() {
@@ -318,6 +324,9 @@ public class MessageConsumerImpl implements MessageConsumer, SwiftMQMessageConsu
         try {
             MessageIndex messageIndex = ((MessageImpl) message).getMessageIndex();
             requestRegistry.request(new MessageDeliveredRequest(this, mySession.dispatchId, serverQueueConsumerId, messageIndex, duplicate));
+            // JMS 2.0
+            if (acknowledgeMode == Session.CLIENT_ACKNOWLEDGE && jmsContext != null)
+                jmsContext.setLastMessageIndex(messageIndex);
         } catch (Exception e) {
         }
     }

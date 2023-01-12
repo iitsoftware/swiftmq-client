@@ -1336,33 +1336,34 @@ public class SessionImpl
     /*
      * TODO: JMS 2.0
      */
+
     @Override
-    public MessageConsumer createSharedConsumer(Topic topic, String s) throws JMSException {
+    public MessageConsumer createSharedConsumer(Topic topic, String sharedSubscriptionName) throws JMSException {
         return null;
     }
 
     @Override
-    public MessageConsumer createSharedConsumer(Topic topic, String s, String s1) throws JMSException {
+    public MessageConsumer createSharedConsumer(Topic topic, String sharedSubscriptionName, String messageSelector) throws JMSException {
         return null;
     }
 
     @Override
-    public MessageConsumer createDurableConsumer(Topic topic, String s) throws JMSException {
+    public MessageConsumer createDurableConsumer(Topic topic, String name) throws JMSException {
         return null;
     }
 
     @Override
-    public MessageConsumer createDurableConsumer(Topic topic, String s, String s1, boolean b) throws JMSException {
+    public MessageConsumer createDurableConsumer(Topic topic, String name, String messageSelector, boolean noLocal) throws JMSException {
         return null;
     }
 
     @Override
-    public MessageConsumer createSharedDurableConsumer(Topic topic, String s) throws JMSException {
+    public MessageConsumer createSharedDurableConsumer(Topic topic, String name) throws JMSException {
         return null;
     }
 
     @Override
-    public MessageConsumer createSharedDurableConsumer(Topic topic, String s, String s1) throws JMSException {
+    public MessageConsumer createSharedDurableConsumer(Topic topic, String name, String messageSelector) throws JMSException {
         return null;
     }
 

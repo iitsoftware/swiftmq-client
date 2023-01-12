@@ -536,24 +536,45 @@ public class ConnectionFactoryImpl
     /*
      * TODO: JMS 2.0
      */
+
     @Override
     public JMSContext createContext() {
-        return null;
+        try {
+            return new JMSContextImpl(createConnection());
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
     }
 
     @Override
-    public JMSContext createContext(String s, String s1) {
-        return null;
+    public JMSContext createContext(String userName, String password) {
+        try {
+            return new JMSContextImpl(createConnection(userName, password));
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
     }
 
     @Override
-    public JMSContext createContext(String s, String s1, int i) {
-        return null;
+    public JMSContext createContext(String userName, String password, int sessionMode) {
+        try {
+            JMSContextImpl context = new JMSContextImpl(createConnection(userName, password));
+            context.createSession(sessionMode);
+            return context;
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
     }
 
     @Override
-    public JMSContext createContext(int i) {
-        return null;
+    public JMSContext createContext(int sessionMode) {
+        try {
+            JMSContextImpl context = new JMSContextImpl(createConnection());
+            context.createSession(sessionMode);
+            return context;
+        } catch (JMSException e) {
+            throw new JMSRuntimeException(e.getMessage());
+        }
     }
 
     @Override
@@ -562,7 +583,7 @@ public class ConnectionFactoryImpl
     }
 
     @Override
-    public XAJMSContext createXAContext(String s, String s1) {
+    public XAJMSContext createXAContext(String userName, String password) {
         return null;
     }
 }
