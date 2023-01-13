@@ -1006,22 +1006,22 @@ public class ConnectionImpl extends RequestServiceRegistry
      */
 
     @Override
-    public Session createSession(int i) throws JMSException {
-        return null;
+    public Session createSession(int sessionMode) throws JMSException {
+        return createSession(false, sessionMode);
     }
 
     @Override
     public Session createSession() throws JMSException {
+        return createSession(Session.AUTO_ACKNOWLEDGE);
+    }
+
+    @Override
+    public ConnectionConsumer createSharedConnectionConsumer(Topic topic, String subscriptionName, String messageSelector, ServerSessionPool sessionPool, int maxMessages) throws JMSException {
         return null;
     }
 
     @Override
-    public ConnectionConsumer createSharedConnectionConsumer(Topic topic, String s, String s1, ServerSessionPool serverSessionPool, int i) throws JMSException {
-        return null;
-    }
-
-    @Override
-    public ConnectionConsumer createSharedDurableConnectionConsumer(Topic topic, String s, String s1, ServerSessionPool serverSessionPool, int i) throws JMSException {
+    public ConnectionConsumer createSharedDurableConnectionConsumer(Topic topic, String subscriptionName, String messageSelector, ServerSessionPool sessionPool, int maxMessages) throws JMSException {
         return null;
     }
 

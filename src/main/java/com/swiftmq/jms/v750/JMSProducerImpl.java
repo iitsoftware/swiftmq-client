@@ -442,10 +442,7 @@ public class JMSProducerImpl implements JMSProducer {
     public JMSProducer send(Destination destination, Message message) {
         setHeaderAndProps(message);
         try {
-            if (completionListener != null)
-                producer.send(destination, message, completionListener);
-            else
-                producer.send(destination, message);
+            producer.send(destination, message, completionListener);
         } catch (JMSException e) {
             throw new JMSRuntimeException(e.getMessage());
         }

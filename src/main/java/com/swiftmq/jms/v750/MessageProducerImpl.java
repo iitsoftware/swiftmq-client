@@ -190,7 +190,7 @@ public class MessageProducerImpl implements MessageProducerExtended, RequestRetr
         msg.setStringProperty("streams_scheduler_destination_type", isTopicDestination(destImpl) ? "topic" : "queue");
         if (msg.getJMSExpiration() > 0)
             msg.setLongProperty("streams_scheduler_expiration", msg.getJMSExpiration());
-        msg.setJMSDestination(new QueueImpl("streams_scheduler_inout"));
+        msg.setJMSDestination(new QueueImpl("streams_scheduler_input"));
         return msg;
     }
 
@@ -240,7 +240,6 @@ public class MessageProducerImpl implements MessageProducerExtended, RequestRetr
                     Completioner.instance().complete(msg, e, completionListener);
                 throw ExceptionConverter.convert(e);
             }
-
             if (replyRequired) {
                 if (reply == null) {
                     JMSException e = new JMSException("Request was cancelled (reply == null)");
