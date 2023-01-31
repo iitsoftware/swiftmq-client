@@ -388,8 +388,7 @@ public class SwiftletManager {
     }
 
     public String getLastSwiftlet() {
-        Object[] arr = swiftletTable.keySet().toArray();
-        return (String) arr[arr.length - 1];
+        return kernelSwiftletNames[kernelSwiftletNames.length - 1];
     }
 
     /**
