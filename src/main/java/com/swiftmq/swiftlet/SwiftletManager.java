@@ -261,6 +261,8 @@ public class SwiftletManager {
                 startKernelSwiftlet(actSwiftletName, swiftletTable);
                 if (kernelSwiftletName.equals("sys$log"))
                     logSwiftlet = (LogSwiftlet) getSwiftlet("sys$log");
+                if (logSwiftlet != null)
+                    logSwiftlet.logInformation("SwiftletManager", "Swiftlet started: " + kernelSwiftletName);
             }
 
             // Create Extension Swiftlet Deployer
@@ -733,19 +735,6 @@ public class SwiftletManager {
 
         fillSwiftletTable();
         startKernelSwiftlets();
-        Set keySet = swiftletTable.keySet();
-        for (Object aKeySet : keySet) {
-            String name = (String) aKeySet;
-            Swiftlet swiftlet = (Swiftlet) swiftletTable.get(name);
-            if (swiftlet.getState() == Swiftlet.STATE_ACTIVE) {
-                Configuration config = (Configuration) RouterConfiguration.Singleton().getConfigurations().get(name);
-                if (config != null) {
-                    MetaData meta = config.getMetaData();
-                    if (meta != null)
-                        logSwiftlet.logInformation("SwiftletManager", "Swiftlet started: " + meta);
-                }
-            }
-        }
         trace("Init swiftlets successful");
         memoryMeter.start();
         startup = false;
