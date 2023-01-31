@@ -196,6 +196,8 @@ public class SwiftletManager {
 
     private void startUpSwiftlet(Swiftlet swiftlet, Configuration config) throws SwiftletException {
         System.out.println("... startup: " + config.getMetaData().getDisplayName());
+        if (logSwiftlet != null)
+            logSwiftlet.logInformation("SwiftletManager", "Swiftlet starting: " + swiftlet.getName() + " ...");
         if (swiftlet.isKernel()) {
             trace("Swiftlet " + swiftlet.getName() + "', fireSwiftletManagerEvent: swiftletStartInitiated");
             fireSwiftletManagerEvent(swiftlet.getName(), "swiftletStartInitiated", new SwiftletManagerEvent(this, swiftlet.getName()));
@@ -203,6 +205,8 @@ public class SwiftletManager {
         }
         swiftlet.startup(config);
         swiftlet.setState(Swiftlet.STATE_ACTIVE);
+        if (logSwiftlet != null)
+            logSwiftlet.logInformation("SwiftletManager", "Swiftlet started: " + swiftlet.getName());
         if (swiftlet.isKernel()) {
             trace("Swiftlet " + swiftlet.getName() + "', fireSwiftletManagerEvent: swiftletStarted");
             fireSwiftletManagerEvent(swiftlet.getName(), "swiftletStarted", new SwiftletManagerEvent(this, swiftlet.getName()));
@@ -261,8 +265,6 @@ public class SwiftletManager {
                 startKernelSwiftlet(actSwiftletName, swiftletTable);
                 if (kernelSwiftletName.equals("sys$log"))
                     logSwiftlet = (LogSwiftlet) getSwiftlet("sys$log");
-                if (logSwiftlet != null)
-                    logSwiftlet.logInformation("SwiftletManager", "Swiftlet started: " + kernelSwiftletName);
             }
 
             // Create Extension Swiftlet Deployer
