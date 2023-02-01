@@ -852,7 +852,6 @@ public class SwiftletManager {
 
     private void stopAllSwiftlets() {
         trace("stopAllSwiftlets");
-        logSwiftlet.logInformation("SwiftletManager", "stopAllSwiftlets");
         List al = new ArrayList();
         synchronized (sSemaphore) {
             for (Object o : RouterConfiguration.Singleton().getConfigurations().entrySet()) {
