@@ -30,6 +30,20 @@ public abstract class NetworkSwiftlet extends Swiftlet {
     ConnectionManager connectionManager;
 
     /**
+     * Sets delayed creation of TCP listeners and connectors
+     *
+     * @param delayed
+     */
+    public abstract void setDelayed(boolean delayed);
+
+    /**
+     * Starts delayed TCP listeners and connectors
+     *
+     * @throws Exception
+     */
+    public abstract void startDelayed() throws Exception;
+
+    /**
      * Returns whether server sockets should be re-used after a reboot of a router
      *
      * @return true/false
