@@ -872,14 +872,12 @@ public class SwiftletManager {
         for (Object anAl : al) {
             Swiftlet swiftlet = (Swiftlet) anAl;
             trace("stopAllSwiftlets: Stopping swiftlet '" + swiftlet.getName() + "'");
-            logSwiftlet.logInformation("SwiftletManager", "stopAllSwiftlets: Stopping swiftlet '" + swiftlet.getName() + "'");
             try {
                 shutdownSwiftlet(swiftlet);
             } catch (SwiftletException ignored) {
             }
             swiftlet.setStartupTime(-1);
             trace("stopAllSwiftlets: Swiftlet " + swiftlet.getName() + " has been stopped");
-            logSwiftlet.logInformation("SwiftletManager", "stopAllSwiftlets: Swiftlet " + swiftlet.getName() + " has been stopped");
         }
     }
 
