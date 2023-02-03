@@ -28,6 +28,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.StringTokenizer;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * A CommandRegistry object will be attached to Entities/EntityLists. It contains
@@ -40,11 +41,12 @@ import java.util.StringTokenizer;
 public class CommandRegistry implements Dumpable {
     String contextName = null;
     Entity myEntity = null;
+    ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
     /**
      * @SBGen Collection of com.swiftmq.mgmt.Command
      */
-    ArrayList commands = new ArrayList();
+    List commands = new ArrayList();
 
     transient CommandExecutor defaultCommand = null;
 
@@ -126,31 +128,43 @@ public class CommandRegistry implements Dumpable {
         return null;
     }
 
-    public synchronized void writeContent(DataOutput out)
+    public void writeContent(DataOutput out)
             throws IOException {
-        writeDump(out, contextName);
-        if (myEntity != null) {
-            out.writeByte(1);
-            Dumpalizer.dump(out, myEntity);
-        } else
-            out.writeByte(0);
-        out.writeInt(commands.size());
-        for (int i = 0; i < commands.size(); i++) {
-            Dumpalizer.dump(out, (Command) commands.get(i));
+        lock.readLock().lock();
+        try {
+            writeDump(out, contextName);
+            if (myEntity != null) {
+                out.writeByte(1);
+                Dumpalizer.dump(out, myEntity);
+            } else
+                out.writeByte(0);
+            out.writeInt(commands.size());
+            for (int i = 0; i < commands.size(); i++) {
+                Dumpalizer.dump(out, (Command) commands.get(i));
+            }
+        } finally {
+            lock.readLock().unlock();
         }
+
     }
 
     public void readContent(DataInput in)
             throws IOException {
-        DumpableFactory factory = new MgmtFactory();
-        contextName = readDump(in);
-        if (in.readByte() == 1)
-            myEntity = (Entity) Dumpalizer.construct(in, factory);
-        commands = new ArrayList();
-        int size = in.readInt();
-        for (int i = 0; i < size; i++) {
-            commands.add(Dumpalizer.construct(in, factory));
+        lock.writeLock().lock();
+        try {
+            DumpableFactory factory = new MgmtFactory();
+            contextName = readDump(in);
+            if (in.readByte() == 1)
+                myEntity = (Entity) Dumpalizer.construct(in, factory);
+            commands = new ArrayList();
+            int size = in.readInt();
+            for (int i = 0; i < size; i++) {
+                commands.add(Dumpalizer.construct(in, factory));
+            }
+        } finally {
+            lock.writeLock().unlock();
         }
+
     }
 
     /**
@@ -159,7 +173,13 @@ public class CommandRegistry implements Dumpable {
      * @param name name.
      */
     public void setName(String name) {
-        this.contextName = name;
+        lock.writeLock().lock();
+        try {
+            this.contextName = name;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     /**
@@ -169,7 +189,13 @@ public class CommandRegistry implements Dumpable {
      * @param defaultCommand default command executor.
      */
     public void setDefaultCommand(CommandExecutor defaultCommand) {
-        this.defaultCommand = defaultCommand;
+        lock.writeLock().lock();
+        try {
+            this.defaultCommand = defaultCommand;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     /**
@@ -177,8 +203,14 @@ public class CommandRegistry implements Dumpable {
      *
      * @return command list.
      */
-    public ArrayList getCommands() {
-        return commands;
+    public List getCommands() {
+        lock.readLock().lock();
+        try {
+            return commands;
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     /**
@@ -187,8 +219,14 @@ public class CommandRegistry implements Dumpable {
      * @param command command.
      */
     public void addCommand(Command command) {
-        if (!commands.contains(command))
-            commands.add(command);
+        lock.writeLock().lock();
+        try {
+            if (!commands.contains(command))
+                commands.add(command);
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     /**
@@ -197,7 +235,13 @@ public class CommandRegistry implements Dumpable {
      * @param command command.
      */
     public void removeCommand(Command command) {
-        commands.remove(command);
+        lock.writeLock().lock();
+        try {
+            commands.remove(command);
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     /**
@@ -207,12 +251,18 @@ public class CommandRegistry implements Dumpable {
      * @return command or null.
      */
     public Command findCommand(String[] cmd) {
-        for (int i = 0; i < commands.size(); i++) {
-            Command c = (Command) commands.get(i);
-            if (c.equals(cmd))
-                return c;
+        lock.readLock().lock();
+        try {
+            for (Object command : commands) {
+                Command c = (Command) command;
+                if (c.equals(cmd))
+                    return c;
+            }
+            return null;
+        } finally {
+            lock.readLock().unlock();
         }
-        return null;
+
     }
 
     private boolean isCommonCommand(String cmd) {

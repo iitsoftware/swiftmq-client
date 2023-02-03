@@ -26,6 +26,7 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.IntStream;
 
 /**
@@ -55,11 +56,11 @@ public class Entity implements Dumpable {
     Map entities = null;
     transient EntityAddListener entityAddListener;
     transient EntityRemoveListener entityRemoveListener;
-    transient ArrayList watchListeners = null;
+    transient List watchListeners = null;
     transient boolean upgrade = false;
     volatile String[] _ctx = null;
     volatile String[] _dctx = null;
-
+    ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
     /**
      * Creates a new Entity.
@@ -76,8 +77,8 @@ public class Entity implements Dumpable {
         this.description = description;
         this.state = state;
         // SBgen: End assign
-        entities = new ClonableMap();
-        properties = new ClonableMap();
+        entities = new CloneableMap();
+        properties = new CloneableMap();
     }
 
     protected Entity() {
@@ -179,10 +180,10 @@ public class Entity implements Dumpable {
         }
     }
 
-    protected ClonableMap readDumpDumpablePropMap(DataInput in, DumpableFactory factory) throws IOException {
+    protected CloneableMap readDumpDumpablePropMap(DataInput in, DumpableFactory factory) throws IOException {
         byte set = in.readByte();
         if (set == 1) {
-            ClonableMap map = new ClonableMap();
+            CloneableMap map = new CloneableMap();
             int size = in.readInt();
             for (int i = 0; i < size; i++) {
                 Property prop = (Property) Dumpalizer.construct(in, factory);
@@ -194,10 +195,10 @@ public class Entity implements Dumpable {
         return null;
     }
 
-    protected ClonableMap readDumpDumpableEntityMap(DataInput in, DumpableFactory factory) throws IOException {
+    protected CloneableMap readDumpDumpableEntityMap(DataInput in, DumpableFactory factory) throws IOException {
         byte set = in.readByte();
         if (set == 1) {
-            ClonableMap map = new ClonableMap();
+            CloneableMap map = new CloneableMap();
             int size = in.readInt();
             for (int i = 0; i < size; i++) {
                 Entity entity = (Entity) Dumpalizer.construct(in, factory);
@@ -210,72 +211,120 @@ public class Entity implements Dumpable {
         return null;
     }
 
-    public synchronized void writeContent(DataOutput out)
+    public void writeContent(DataOutput out)
             throws IOException {
-        writeDump(out, name);
-        writeDump(out, displayName);
-        writeDump(out, description);
-        writeDump(out, state);
-        out.writeBoolean(dynamic);
-        writeDump(out, dynamicPropNames);
-        writeDump(out, commandRegistry);
-        writeDump(out, imageArray);
-        writeDump(out, properties);
-        writeDump(out, entities);
+        lock.readLock().lock();
+        try {
+            writeDump(out, name);
+            writeDump(out, displayName);
+            writeDump(out, description);
+            writeDump(out, state);
+            out.writeBoolean(dynamic);
+            writeDump(out, dynamicPropNames);
+            writeDump(out, commandRegistry);
+            writeDump(out, imageArray);
+            writeDump(out, properties);
+            writeDump(out, entities);
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     public void readContent(DataInput in)
             throws IOException {
-        name = readDump(in);
-        displayName = readDump(in);
-        description = readDump(in);
-        state = readDump(in);
-        dynamic = in.readBoolean();
-        dynamicPropNames = readDumpStringArray(in);
-        commandRegistry = (CommandRegistry) readDumpDumpable(in, factory);
-        imageArray = readDumpByteArray(in);
-        properties = readDumpDumpablePropMap(in, factory);
-        entities = readDumpDumpableEntityMap(in, factory);
+        lock.writeLock().lock();
+        try {
+            name = readDump(in);
+            displayName = readDump(in);
+            description = readDump(in);
+            state = readDump(in);
+            dynamic = in.readBoolean();
+            dynamicPropNames = readDumpStringArray(in);
+            commandRegistry = (CommandRegistry) readDumpDumpable(in, factory);
+            imageArray = readDumpByteArray(in);
+            properties = readDumpDumpablePropMap(in, factory);
+            entities = readDumpDumpableEntityMap(in, factory);
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     /**
      * Internal use only.
      */
     public void setImageArray(byte[] array) {
-        this.imageArray = array;
+        lock.writeLock().lock();
+        try {
+            this.imageArray = array;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     String getIconFilename() {
-        return iconFilename;
+        lock.readLock().lock();
+        try {
+            return iconFilename;
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     void setIconFilename(String iconFilename) {
-        this.iconFilename = iconFilename;
+        lock.writeLock().lock();
+        try {
+            this.iconFilename = iconFilename;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     /**
      * Internal use only.
      */
     public ImageIcon getIcon() {
-        if (imageArray == null)
-            return null;
-        if (imageIcon == null)
-            imageIcon = new ImageIcon(imageArray);
-        return imageIcon;
+        lock.readLock().lock();
+        try {
+            if (imageArray == null)
+                return null;
+            if (imageIcon == null)
+                imageIcon = new ImageIcon(imageArray);
+            return imageIcon;
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     /**
      * Internal use only.
      */
     public boolean isDynamic() {
-        return dynamic;
+        lock.readLock().lock();
+        try {
+            return dynamic;
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     /**
      * Internal use only.
      */
     public void setDynamic(boolean b) {
-        this.dynamic = b;
+        lock.writeLock().lock();
+        try {
+            this.dynamic = b;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     /**
@@ -284,7 +333,13 @@ public class Entity implements Dumpable {
      * @return user object.
      */
     public Object getUserObject() {
-        return userObject;
+        lock.readLock().lock();
+        try {
+            return userObject;
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     /**
@@ -293,7 +348,13 @@ public class Entity implements Dumpable {
      * @param userObject user object.
      */
     public void setUserObject(Object userObject) {
-        this.userObject = userObject;
+        lock.writeLock().lock();
+        try {
+            this.userObject = userObject;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     /**
@@ -302,7 +363,13 @@ public class Entity implements Dumpable {
      * @return dynamic object.
      */
     public Object getDynamicObject() {
-        return dynamicObject;
+        lock.readLock().lock();
+        try {
+            return dynamicObject;
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     /**
@@ -314,7 +381,13 @@ public class Entity implements Dumpable {
      * @param dynamicObject dynamic object.
      */
     public void setDynamicObject(Object dynamicObject) {
-        this.dynamicObject = dynamicObject;
+        lock.writeLock().lock();
+        try {
+            this.dynamicObject = dynamicObject;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     /**
@@ -323,7 +396,13 @@ public class Entity implements Dumpable {
      * @return array of property names.
      */
     public String[] getDynamicPropNames() {
-        return dynamicPropNames;
+        lock.readLock().lock();
+        try {
+            return dynamicPropNames;
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     /**
@@ -336,47 +415,65 @@ public class Entity implements Dumpable {
      * @param dynamicPropNames array of property names.
      */
     public void setDynamicPropNames(String[] dynamicPropNames) {
-        this.dynamicPropNames = dynamicPropNames;
+        lock.writeLock().lock();
+        try {
+            this.dynamicPropNames = dynamicPropNames;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     /**
      * Internal use only.
      */
     public String[] getContext() {
-        if (_ctx != null)
+        lock.readLock().lock();
+        try {
+            if (_ctx != null)
+                return _ctx;
+            List al = new ArrayList();
+            Entity actEntity = this;
+            while (actEntity != null) {
+                al.add(actEntity.getName());
+                actEntity = actEntity.getParent();
+            }
+            String[] ctx = new String[al.size()];
+            int j = 0;
+            for (int i = al.size() - 1; i >= 0; i--)
+                ctx[j++] = (String) al.get(i);
+            _ctx = ctx;
             return _ctx;
-        ArrayList al = new ArrayList();
-        Entity actEntity = this;
-        while (actEntity != null) {
-            al.add(actEntity.getName());
-            actEntity = actEntity.getParent();
+        } finally {
+            lock.readLock().unlock();
         }
-        String[] ctx = new String[al.size()];
-        int j = 0;
-        for (int i = al.size() - 1; i >= 0; i--)
-            ctx[j++] = (String) al.get(i);
-        _ctx = ctx;
-        return _ctx;
+
     }
 
     /**
      * Internal use only.
      */
     public String[] getDisplayContext() {
-        if (_dctx != null)
+        lock.readLock().lock();
+        try {
+            if (_dctx != null)
+                return _dctx;
+            ArrayList al = new ArrayList();
+            Entity actEntity = this;
+            while (actEntity != null) {
+                al.add(actEntity.getDisplayName());
+                actEntity = actEntity.getParent();
+            }
+            String[] ctx = new String[al.size()];
+            int j = 0;
+            for (int i = al.size() - 1; i >= 0; i--)
+                ctx[j++] = (String) al.get(i);
+            _dctx = ctx;
             return _dctx;
-        ArrayList al = new ArrayList();
-        Entity actEntity = this;
-        while (actEntity != null) {
-            al.add(actEntity.getDisplayName());
-            actEntity = actEntity.getParent();
+        } finally {
+            lock.readLock().unlock();
         }
-        String[] ctx = new String[al.size()];
-        int j = 0;
-        for (int i = al.size() - 1; i >= 0; i--)
-            ctx[j++] = (String) al.get(i);
-        _dctx = ctx;
-        return _dctx;
+
     }
 
 
@@ -387,71 +484,78 @@ public class Entity implements Dumpable {
      * @see EntityList
      */
     public void createCommands() {
-        commandRegistry = new CommandRegistry("Context '" + name + "'", null);
-        CommandExecutor setExecutor = new CommandExecutor() {
-            public String[] execute(String[] context, Entity entity, String[] cmd) {
-                if (cmd.length < 2 || cmd.length > 3)
-                    return new String[]{TreeCommands.ERROR, "Invalid command, please try '" + SET_COMMAND + " <prop> [<value>]'"};
-                String[] result = null;
-                Property p = getProperty(cmd[1]);
-                if (p == null)
-                    result = new String[]{TreeCommands.ERROR, "Unknown Property: " + cmd[1]};
-                else if (p.isReadOnly())
-                    result = new String[]{TreeCommands.ERROR, "Property is read-only."};
-                else {
-                    try {
-                        if (cmd.length == 2)
-                            p.setValue(null);
-                        else
-                            p.setValue(Property.convertToType(p.getType(), cmd[2]));
-                        if (p.isRebootRequired())
-                            result = new String[]{TreeCommands.INFO, "To activate this Property Change, a Reboot of this Router is required."};
-                    } catch (Exception e) {
-                        result = new String[]{TreeCommands.ERROR, e.getMessage()};
+        Map cloned = null;
+        lock.readLock().lock();
+        try {
+            commandRegistry = new CommandRegistry("Context '" + name + "'", null);
+            CommandExecutor setExecutor = new CommandExecutor() {
+                public String[] execute(String[] context, Entity entity, String[] cmd) {
+                    if (cmd.length < 2 || cmd.length > 3)
+                        return new String[]{TreeCommands.ERROR, "Invalid command, please try '" + SET_COMMAND + " <prop> [<value>]'"};
+                    String[] result = null;
+                    Property p = getProperty(cmd[1]);
+                    if (p == null)
+                        result = new String[]{TreeCommands.ERROR, "Unknown Property: " + cmd[1]};
+                    else if (p.isReadOnly())
+                        result = new String[]{TreeCommands.ERROR, "Property is read-only."};
+                    else {
+                        try {
+                            if (cmd.length == 2)
+                                p.setValue(null);
+                            else
+                                p.setValue(Property.convertToType(p.getType(), cmd[2]));
+                            if (p.isRebootRequired())
+                                result = new String[]{TreeCommands.INFO, "To activate this Property Change, a Reboot of this Router is required."};
+                        } catch (Exception e) {
+                            result = new String[]{TreeCommands.ERROR, e.getMessage()};
+                        }
                     }
+                    return result;
                 }
-                return result;
-            }
-        };
-        Command setCommand = new Command(SET_COMMAND, SET_COMMAND + " <prop> [<value>]", "Set Property <prop> to Value <value> or null", true, setExecutor);
-        commandRegistry.addCommand(setCommand);
-        CommandExecutor describeExecutor = new CommandExecutor() {
-            private String check(Object o) {
-                return o == null ? "<not set>" : o.toString();
-            }
+            };
+            Command setCommand = new Command(SET_COMMAND, SET_COMMAND + " <prop> [<value>]", "Set Property <prop> to Value <value> or null", true, setExecutor);
+            commandRegistry.addCommand(setCommand);
+            CommandExecutor describeExecutor = new CommandExecutor() {
+                private String check(Object o) {
+                    return o == null ? "<not set>" : o.toString();
+                }
 
-            public String[] execute(String[] context, Entity entity, String[] cmd) {
-                if (cmd.length != 2)
-                    return new String[]{TreeCommands.ERROR, "Invalid command, please try 'describe <prop>'"};
-                String[] result = null;
-                Property p = getProperty(cmd[1]);
-                if (p == null)
-                    result = new String[]{TreeCommands.ERROR, "Unknown Property: " + cmd[1]};
-                else {
-                    result = new String[13];
-                    result[0] = TreeCommands.RESULT;
-                    result[1] = "Property Name  : " + p.getName();
-                    result[2] = "Display Name   : " + check(p.getDisplayName());
-                    result[3] = "Description    : " + check(p.getDescription());
-                    result[4] = "Type           : " + p.getType();
-                    result[5] = "Min. Value     : " + check(p.getMinValue());
-                    result[6] = "Max. Value     : " + check(p.getMaxValue());
-                    result[7] = "Default Value  : " + check(p.getDefaultValue());
-                    result[8] = "Poss. Values   : " + check(p.getPossibleValues());
-                    result[9] = "Actual Value   : " + check(p.getValue());
-                    result[10] = "Mandatory     : " + p.isMandatory();
-                    result[11] = "Read Only      : " + p.isReadOnly();
-                    result[12] = "Reboot Required: " + p.isRebootRequired();
+                public String[] execute(String[] context, Entity entity, String[] cmd) {
+                    if (cmd.length != 2)
+                        return new String[]{TreeCommands.ERROR, "Invalid command, please try 'describe <prop>'"};
+                    String[] result = null;
+                    Property p = getProperty(cmd[1]);
+                    if (p == null)
+                        result = new String[]{TreeCommands.ERROR, "Unknown Property: " + cmd[1]};
+                    else {
+                        result = new String[13];
+                        result[0] = TreeCommands.RESULT;
+                        result[1] = "Property Name  : " + p.getName();
+                        result[2] = "Display Name   : " + check(p.getDisplayName());
+                        result[3] = "Description    : " + check(p.getDescription());
+                        result[4] = "Type           : " + p.getType();
+                        result[5] = "Min. Value     : " + check(p.getMinValue());
+                        result[6] = "Max. Value     : " + check(p.getMaxValue());
+                        result[7] = "Default Value  : " + check(p.getDefaultValue());
+                        result[8] = "Poss. Values   : " + check(p.getPossibleValues());
+                        result[9] = "Actual Value   : " + check(p.getValue());
+                        result[10] = "Mandatory     : " + p.isMandatory();
+                        result[11] = "Read Only      : " + p.isReadOnly();
+                        result[12] = "Reboot Required: " + p.isRebootRequired();
+                    }
+                    return result;
                 }
-                return result;
-            }
-        };
-        Command describeCommand = new Command("describe", "describe <prop>", "Show full Description of Property <prop>", true, describeExecutor);
-        commandRegistry.addCommand(describeCommand);
+            };
+            Command describeCommand = new Command("describe", "describe <prop>", "Show full Description of Property <prop>", true, describeExecutor);
+            commandRegistry.addCommand(describeCommand);
+            cloned = (Map) ((TreeMap) entities).clone();
+        } finally {
+            lock.readLock().unlock();
+        }
 
         // Do it for all sub-entities
-        for (Iterator iter = entities.entrySet().iterator(); iter.hasNext(); ) {
-            Entity entity = (Entity) ((Map.Entry) iter.next()).getValue();
+        for (Object o : cloned.entrySet()) {
+            Entity entity = (Entity) ((Map.Entry) o).getValue();
             entity.createCommands();
         }
     }
@@ -463,7 +567,13 @@ public class Entity implements Dumpable {
      * @return command registry.
      */
     public CommandRegistry getCommandRegistry() {
-        return commandRegistry;
+        lock.readLock().lock();
+        try {
+            return commandRegistry;
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     /**
@@ -472,8 +582,13 @@ public class Entity implements Dumpable {
      * @return entity name.
      */
     public String getName() {
-        // SBgen: Get variable
-        return (name);
+        lock.readLock().lock();
+        try {
+            return (name);
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     /**
@@ -482,8 +597,13 @@ public class Entity implements Dumpable {
      * @param name name.
      */
     public void setName(String name) {
-        // SBgen: Assign variable
-        this.name = name;
+        lock.writeLock().lock();
+        try {
+            this.name = name;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     /**
@@ -492,8 +612,13 @@ public class Entity implements Dumpable {
      * @return display name.
      */
     public String getDisplayName() {
-        // SBgen: Get variable
-        return (displayName);
+        lock.readLock().lock();
+        try {
+            return (displayName);
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
 
@@ -503,8 +628,13 @@ public class Entity implements Dumpable {
      * @return description.
      */
     public String getDescription() {
-        // SBgen: Get variable
-        return (description);
+        lock.readLock().lock();
+        try {
+            return (description);
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
 
@@ -514,9 +644,15 @@ public class Entity implements Dumpable {
      * @param name    command name.
      * @param command command.
      */
-    public synchronized void addCommand(String name, Command command) {
-        command.setParent(this);
-        commandRegistry.addCommand(command);
+    public void addCommand(String name, Command command) {
+        lock.writeLock().lock();
+        try {
+            command.setParent(this);
+            commandRegistry.addCommand(command);
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
 
@@ -525,26 +661,42 @@ public class Entity implements Dumpable {
      *
      * @param name command name.
      */
-    public synchronized void removeCommand(String name) {
-        Command cmd = commandRegistry.findCommand(new String[]{name});
-        if (cmd != null)
-            commandRegistry.removeCommand(cmd);
+    public void removeCommand(String name) {
+        lock.writeLock().lock();
+        try {
+            Command cmd = commandRegistry.findCommand(new String[]{name});
+            if (cmd != null)
+                commandRegistry.removeCommand(cmd);
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     /**
      * Internal use only.
      */
     public String getState() {
-        // SBgen: Get variable
-        return (state);
+        lock.readLock().lock();
+        try {
+            return (state);
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     /**
      * Internal use only.
      */
     public void setState(String state) {
-        // SBgen: Assign variable
-        this.state = state;
+        lock.writeLock().lock();
+        try {
+            this.state = state;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
 
@@ -554,9 +706,15 @@ public class Entity implements Dumpable {
      * @param name     property name.
      * @param property property.
      */
-    public synchronized void addProperty(String name, Property property) {
-        property.setParent(this);
-        properties.put(name, property);
+    public void addProperty(String name, Property property) {
+        lock.writeLock().lock();
+        try {
+            property.setParent(this);
+            properties.put(name, property);
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
 
@@ -565,8 +723,14 @@ public class Entity implements Dumpable {
      *
      * @param name property name.
      */
-    public synchronized void removeProperty(String name) {
-        properties.remove(name);
+    public void removeProperty(String name) {
+        lock.writeLock().lock();
+        try {
+            properties.remove(name);
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
 
@@ -576,9 +740,14 @@ public class Entity implements Dumpable {
      * @param name property name.
      * @return property.
      */
-    public synchronized Property getProperty(String name) {
-        // SBgen: Get variable
-        return (Property) properties.get(name);
+    public Property getProperty(String name) {
+        lock.readLock().lock();
+        try {
+            return (Property) properties.get(name);
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
 
@@ -587,9 +756,14 @@ public class Entity implements Dumpable {
      *
      * @return map of properties.
      */
-    public synchronized Map getProperties() {
-        // SBgen: Get variable
-        return ((ClonableMap) properties).createCopy();
+    public Map getProperties() {
+        lock.readLock().lock();
+        try {
+            return ((CloneableMap) properties).createCopy();
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
 
@@ -599,12 +773,24 @@ public class Entity implements Dumpable {
      * @param entity entity.
      * @throws EntityAddException thrown by an EntityAddListener.
      */
-    public synchronized void addEntity(Entity entity)
+    public void addEntity(Entity entity)
             throws EntityAddException {
-        if (entityAddListener != null)
-            entityAddListener.onEntityAdd(this, entity);
+        lock.readLock().lock();
+        try {
+            if (entityAddListener != null)
+                entityAddListener.onEntityAdd(this, entity);
+        } finally {
+            lock.readLock().unlock();
+        }
         entity.setParent(this);
-        entities.put(entity.getName(), entity);
+
+        lock.writeLock().lock();
+        try {
+            entities.put(entity.getName(), entity);
+        } finally {
+            lock.writeLock().unlock();
+        }
+
         notifyEntityWatchListeners(true, entity);
     }
 
@@ -615,13 +801,25 @@ public class Entity implements Dumpable {
      * @param entity entity.
      * @throws EntityRemoveException thrown by an EntityRemoveListener.
      */
-    public synchronized void removeEntity(Entity entity)
+    public void removeEntity(Entity entity)
             throws EntityRemoveException {
         if (entity == null)
             return;
-        if (entityRemoveListener != null)
-            entityRemoveListener.onEntityRemove(this, entity);
-        entities.remove(entity.getName());
+        lock.readLock().lock();
+        try {
+            if (entityRemoveListener != null)
+                entityRemoveListener.onEntityRemove(this, entity);
+        } finally {
+            lock.readLock().unlock();
+        }
+
+        lock.writeLock().lock();
+        try {
+            entities.remove(entity.getName());
+        } finally {
+            lock.writeLock().unlock();
+        }
+
         entity.setParent(null);
         notifyEntityWatchListeners(false, entity);
     }
@@ -630,8 +828,14 @@ public class Entity implements Dumpable {
     /**
      * Removes all Entities.
      */
-    public synchronized void removeEntities() {
-        entities.clear();
+    public void removeEntities() {
+        lock.writeLock().lock();
+        try {
+            entities.clear();
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
 
@@ -640,17 +844,25 @@ public class Entity implements Dumpable {
      *
      * @param dynamicObject dynamic object.
      */
-    public synchronized void removeDynamicEntity(Object dynamicObject) {
-        for (Iterator iter = entities.entrySet().iterator(); iter.hasNext(); ) {
-            Entity entity = (Entity) ((Map.Entry) iter.next()).getValue();
-            if (entity.getDynamicObject() == dynamicObject) {
-                entity.setDynamicObject(null);
-                entity.setParent(null);
-                iter.remove();
-                notifyEntityWatchListeners(false, entity);
-                break;
+    public void removeDynamicEntity(Object dynamicObject) {
+        Entity entity = null;
+        lock.readLock().lock();
+        try {
+            for (Iterator iter = entities.entrySet().iterator(); iter.hasNext(); ) {
+                entity = (Entity) ((Map.Entry) iter.next()).getValue();
+                if (entity.getDynamicObject() == dynamicObject) {
+                    entity.setDynamicObject(null);
+                    entity.setParent(null);
+                    iter.remove();
+                    break;
+                }
             }
+        } finally {
+            lock.readLock().unlock();
         }
+
+        if (entity != null)
+            notifyEntityWatchListeners(false, entity);
     }
 
 
@@ -660,9 +872,14 @@ public class Entity implements Dumpable {
      * @param name name.
      * @return Entity.
      */
-    public synchronized Entity getEntity(String name) {
-        // SBgen: Get variable
-        return (Entity) entities.get(name);
+    public Entity getEntity(String name) {
+        lock.readLock().lock();
+        try {
+            return (Entity) entities.get(name);
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
 
@@ -671,14 +888,20 @@ public class Entity implements Dumpable {
      *
      * @return array with all sub-entity names.
      */
-    public synchronized String[] getEntityNames() {
-        if (entities.size() == 0)
-            return null;
-        String[] rArr = new String[entities.size()];
-        int i = 0;
-        for (Iterator iter = entities.keySet().iterator(); iter.hasNext(); )
-            rArr[i++] = (String) iter.next();
-        return rArr;
+    public String[] getEntityNames() {
+        lock.readLock().lock();
+        try {
+            if (entities.size() == 0)
+                return null;
+            String[] rArr = new String[entities.size()];
+            int i = 0;
+            for (Iterator iter = entities.keySet().iterator(); iter.hasNext(); )
+                rArr[i++] = (String) iter.next();
+            return rArr;
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
 
@@ -687,9 +910,14 @@ public class Entity implements Dumpable {
      *
      * @return entity map.
      */
-    public synchronized Map getEntities() {
-        // SBgen: Get variable
-        return ((ClonableMap) entities).createCopy();
+    public Map getEntities() {
+        lock.readLock().lock();
+        try {
+            return ((CloneableMap) entities).createCopy();
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     /**
@@ -698,13 +926,23 @@ public class Entity implements Dumpable {
      * @return parent Entity.
      */
     public Entity getParent() {
-        // SBgen: Get variable
-        return (parent);
+        lock.readLock().lock();
+        try {
+            return (parent);
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     protected void setParent(Entity parent) {
-        // SBgen: Assign variable
-        this.parent = parent;
+        lock.writeLock().lock();
+        try {
+            this.parent = parent;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     /**
@@ -713,8 +951,13 @@ public class Entity implements Dumpable {
      * @return listener.
      */
     public EntityAddListener getEntityAddListener() {
-        // SBgen: Get variable
-        return (entityAddListener);
+        lock.readLock().lock();
+        try {
+            return (entityAddListener);
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     /**
@@ -725,8 +968,13 @@ public class Entity implements Dumpable {
      * @param entityAddListener listener.
      */
     public void setEntityAddListener(EntityAddListener entityAddListener) {
-        // SBgen: Assign variable
-        this.entityAddListener = entityAddListener;
+        lock.writeLock().lock();
+        try {
+            this.entityAddListener = entityAddListener;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     /**
@@ -735,8 +983,13 @@ public class Entity implements Dumpable {
      * @return listener.
      */
     public EntityRemoveListener getEntityRemoveListener() {
-        // SBgen: Get variable
-        return (entityRemoveListener);
+        lock.readLock().lock();
+        try {
+            return (entityRemoveListener);
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     /**
@@ -747,8 +1000,13 @@ public class Entity implements Dumpable {
      * @param entityRemoveListener listener.
      */
     public void setEntityRemoveListener(EntityRemoveListener entityRemoveListener) {
-        // SBgen: Assign variable
-        this.entityRemoveListener = entityRemoveListener;
+        lock.writeLock().lock();
+        try {
+            this.entityRemoveListener = entityRemoveListener;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     /**
@@ -759,10 +1017,16 @@ public class Entity implements Dumpable {
      *
      * @param l listener.
      */
-    public synchronized void addEntityWatchListener(EntityWatchListener l) {
-        if (watchListeners == null)
-            watchListeners = new ArrayList();
-        watchListeners.add(l);
+    public void addEntityWatchListener(EntityWatchListener l) {
+        lock.writeLock().lock();
+        try {
+            if (watchListeners == null)
+                watchListeners = new ArrayList();
+            watchListeners.add(l);
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
 
@@ -771,47 +1035,78 @@ public class Entity implements Dumpable {
      *
      * @param l listener.
      */
-    public synchronized void removeEntityWatchListener(EntityWatchListener l) {
-        if (watchListeners != null)
-            watchListeners.remove(l);
+    public void removeEntityWatchListener(EntityWatchListener l) {
+        lock.writeLock().lock();
+        try {
+            if (watchListeners != null)
+                watchListeners.remove(l);
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     protected void notifyEntityWatchListeners(boolean entityAdded, Entity entity) {
         if (watchListeners == null)
             return;
-        for (int i = 0; i < watchListeners.size(); i++) {
-            EntityWatchListener l = (EntityWatchListener) watchListeners.get(i);
+        List cloned = null;
+        lock.readLock().lock();
+        try {
+            cloned = (List) ((ArrayList) watchListeners).clone();
+        } finally {
+            lock.readLock().unlock();
+        }
+
+        IntStream.range(0, cloned.size()).mapToObj(i -> (EntityWatchListener) watchListeners.get(i)).forEach(l -> {
             if (entityAdded)
                 l.entityAdded(this, entity);
             else
                 l.entityRemoved(this, entity);
-        }
+        });
     }
 
     /**
      * Internal use only.
      */
     public Entity createCopy() {
-        Entity entity = new Entity(name, displayName, description, state);
-        entity.dynamic = dynamic;
-        entity.dynamicPropNames = dynamicPropNames;
-        entity.commandRegistry = commandRegistry;
-        entity.properties = new ClonableMap();
-        for (Iterator iter = properties.entrySet().iterator(); iter.hasNext(); ) {
-            Property p = (Property) ((Map.Entry) iter.next()).getValue();
-            Property copy = p.createCopy();
-            copy.setParent(entity);
-            entity.properties.put(copy.getName(), copy);
+        lock.readLock().lock();
+        try {
+            Entity entity = new Entity(name, displayName, description, state);
+            entity.dynamic = dynamic;
+            entity.dynamicPropNames = dynamicPropNames;
+            entity.commandRegistry = commandRegistry;
+            entity.properties = new CloneableMap();
+            for (Object o : properties.entrySet()) {
+                Property p = (Property) ((Map.Entry) o).getValue();
+                Property copy = p.createCopy();
+                copy.setParent(entity);
+                entity.properties.put(copy.getName(), copy);
+            }
+            return entity;
+        } finally {
+            lock.readLock().unlock();
         }
-        return entity;
+
     }
 
     public boolean isUpgrade() {
-        return upgrade;
+        lock.readLock().lock();
+        try {
+            return upgrade;
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     public void setUpgrade(boolean upgrade) {
-        this.upgrade = upgrade;
+        lock.writeLock().lock();
+        try {
+            this.upgrade = upgrade;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     protected String quote(String s) {
@@ -823,107 +1118,119 @@ public class Entity implements Dumpable {
     }
 
     public String toJson() {
-        StringBuffer s = new StringBuffer();
-        s.append("{");
-        s.append(quote("nodetype")).append(": ");
-        s.append(quote("entity")).append(", ");
-        s.append(quote("name")).append(": ");
-        s.append(quote(name)).append(", ");
-        s.append(quote("displayName")).append(": ");
-        s.append(quote(displayName)).append(", ");
-        s.append(quote("description")).append(": ");
-        s.append(quote(description)).append(", ");
-        s.append(quote("hasChilds")).append(": ");
-        s.append(entities != null && entities.size() > 0);
-        if (properties != null) {
-            s.append(", ");
-            s.append(quote("properties")).append(": ");
-            s.append("[");
-            boolean first = true;
-            for (Object o : properties.entrySet()) {
-                if (!first)
-                    s.append(", ");
-                first = false;
-                Property p = (Property) ((Map.Entry) o).getValue();
-                s.append(p.toJson());
-            }
-            s.append("]");
-        }
-        if (entities != null) {
-            s.append(", ");
-            s.append(quote("entities")).append(": ");
-            s.append("[");
-            boolean first = true;
-            for (Object o : entities.entrySet()) {
-                if (!first)
-                    s.append(", ");
-                first = false;
-                Entity e = (Entity) ((Map.Entry) o).getValue();
-                s.append("{");
-                s.append(quote("nodetype")).append(": ");
-                if (e instanceof EntityList)
-                    s.append(quote("entitylist")).append(", ");
-                else
-                    s.append(quote("entity")).append(", ");
-                s.append(quote("name")).append(": ");
-                s.append(quote(e.getName())).append(", ");
-                s.append(quote("displayName")).append(": ");
-                s.append(quote(e.getDisplayName())).append(", ");
-                s.append(quote("description")).append(": ");
-                s.append(quote(e.getDescription())).append(", ");
-                s.append(quote("hasChilds")).append(": ");
-                if (e instanceof EntityList)
-                    s.append(true);
-                else
-                    s.append(e.getEntities() != null && e.getEntities().size() > 0);
-                s.append("}");
-
-            }
-            s.append("]");
-        }
-        if (commandRegistry != null && commandRegistry.getCommands() != null) {
-            s.append(", ");
-            s.append(quote("commands")).append(": ");
-            s.append("[");
-            List cmds = commandRegistry.getCommands();
-            boolean first = true;
-            for (int i = 0; i < cmds.size(); i++) {
-                Command command = (Command) cmds.get(i);
-                if (commandIncluded(command, new String[]{"help", "set", "describe"})) {
-                    if (!first) {
+        lock.readLock().lock();
+        try {
+            StringBuffer s = new StringBuffer();
+            s.append("{");
+            s.append(quote("nodetype")).append(": ");
+            s.append(quote("entity")).append(", ");
+            s.append(quote("name")).append(": ");
+            s.append(quote(name)).append(", ");
+            s.append(quote("displayName")).append(": ");
+            s.append(quote(displayName)).append(", ");
+            s.append(quote("description")).append(": ");
+            s.append(quote(description)).append(", ");
+            s.append(quote("hasChilds")).append(": ");
+            s.append(entities != null && entities.size() > 0);
+            if (properties != null) {
+                s.append(", ");
+                s.append(quote("properties")).append(": ");
+                s.append("[");
+                boolean first = true;
+                for (Object o : properties.entrySet()) {
+                    if (!first)
                         s.append(", ");
-                    }
                     first = false;
-                    s.append(((Command) cmds.get(i)).toJson());
+                    Property p = (Property) ((Map.Entry) o).getValue();
+                    s.append(p.toJson());
                 }
+                s.append("]");
             }
-            s.append("]");
+            if (entities != null) {
+                s.append(", ");
+                s.append(quote("entities")).append(": ");
+                s.append("[");
+                boolean first = true;
+                for (Object o : entities.entrySet()) {
+                    if (!first)
+                        s.append(", ");
+                    first = false;
+                    Entity e = (Entity) ((Map.Entry) o).getValue();
+                    s.append("{");
+                    s.append(quote("nodetype")).append(": ");
+                    if (e instanceof EntityList)
+                        s.append(quote("entitylist")).append(", ");
+                    else
+                        s.append(quote("entity")).append(", ");
+                    s.append(quote("name")).append(": ");
+                    s.append(quote(e.getName())).append(", ");
+                    s.append(quote("displayName")).append(": ");
+                    s.append(quote(e.getDisplayName())).append(", ");
+                    s.append(quote("description")).append(": ");
+                    s.append(quote(e.getDescription())).append(", ");
+                    s.append(quote("hasChilds")).append(": ");
+                    if (e instanceof EntityList)
+                        s.append(true);
+                    else
+                        s.append(e.getEntities() != null && e.getEntities().size() > 0);
+                    s.append("}");
+
+                }
+                s.append("]");
+            }
+            if (commandRegistry != null && commandRegistry.getCommands() != null) {
+                s.append(", ");
+                s.append(quote("commands")).append(": ");
+                s.append("[");
+                List cmds = commandRegistry.getCommands();
+                boolean first = true;
+                for (int i = 0; i < cmds.size(); i++) {
+                    Command command = (Command) cmds.get(i);
+                    if (commandIncluded(command, new String[]{"help", "set", "describe"})) {
+                        if (!first) {
+                            s.append(", ");
+                        }
+                        first = false;
+                        s.append(((Command) cmds.get(i)).toJson());
+                    }
+                }
+                s.append("]");
+            }
+            s.append("}");
+            return s.toString();
+        } finally {
+            lock.readLock().unlock();
         }
-        s.append("}");
-        return s.toString();
+
     }
 
     public String toString() {
-        StringBuffer s = new StringBuffer();
-        s.append("\n[Entity, name=");
-        s.append(name);
-        s.append(", displayName=");
-        s.append(displayName);
-        s.append(", description=");
-        s.append(description);
-        s.append(", state=");
-        s.append(state);
-        s.append(", properties=");
-        s.append(properties);
-        s.append(", entities=");
-        s.append(entities);
-        s.append("]");
-        return s.toString();
+        lock.readLock().lock();
+        try {
+            StringBuffer s = new StringBuffer();
+            s.append("\n[Entity, name=");
+            s.append(name);
+            s.append(", displayName=");
+            s.append(displayName);
+            s.append(", description=");
+            s.append(description);
+            s.append(", state=");
+            s.append(state);
+            s.append(", properties=");
+            s.append(properties);
+            s.append(", entities=");
+            s.append(entities);
+            s.append("]");
+            return s.toString();
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
-    protected class ClonableMap extends TreeMap {
-        public ClonableMap createCopy() {
-            return (ClonableMap) clone();
+    protected class CloneableMap extends TreeMap {
+        public CloneableMap createCopy() {
+            return (CloneableMap) clone();
         }
     }
 }
