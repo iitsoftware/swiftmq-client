@@ -21,17 +21,16 @@ import com.swiftmq.swiftlet.Swiftlet;
 import com.swiftmq.swiftlet.SwiftletManager;
 import com.swiftmq.util.SwiftUtilities;
 
-import java.io.DataInput;
-import java.io.DataOutput;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class RouterConfigInstance extends EntityList {
 
     Entity currentEntity = null;
+    ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
     /**
      * @SBGen Constructor
@@ -48,76 +47,73 @@ public class RouterConfigInstance extends EntityList {
         return MgmtFactory.CONFIGINSTANCE;
     }
 
-    public void writeContent(DataOutput out)
-            throws IOException {
-        super.writeContent(out);
-    }
-
-    public void readContent(DataInput in)
-            throws IOException {
-        super.readContent(in);
-    }
-
-    /**
-     * @return
-     * @SBGen Method get commandRegistry
-     */
-    public CommandRegistry getCommandRegistry() {
-        // SBgen: Get variable
-        return (commandRegistry);
-    }
-
-    /**
-     * @param commandRegistry
-     * @SBGen Method set commandRegistry
-     */
-    public void setCommandRegistry(CommandRegistry commandRegistry) {
-        // SBgen: Assign variable
-        this.commandRegistry = commandRegistry;
-    }
-
-    public synchronized void addEntity(Entity entity)
+    public void addEntity(Entity entity)
             throws EntityAddException {
         Entity config = entity;
-        if (entityAddListener != null)
-            config = entityAddListener.onConfigurationAdd(this, entity);
-        //config.setParent(this) <--- das hier nicht, sonst wird im Explorer falsch adressiert (ctx inkl. routername)
-        entities.put(config.getName(), config);
+        lock.writeLock().lock();
+        try {
+            //config.setParent(this) <--- das hier nicht, sonst wird im Explorer falsch adressiert (ctx inkl. routername)
+            entities.put(config.getName(), config);
+        } finally {
+            lock.writeLock().unlock();
+        }
+
+        lock.readLock().lock();
+        try {
+            if (entityAddListener != null)
+                config = entityAddListener.onConfigurationAdd(this, entity);
+        } finally {
+            lock.readLock().unlock();
+        }
+
         notifyEntityWatchListeners(true, config);
     }
 
-    /**
-     * @return
-     * @SBGen Method get configurations
-     */
     public Map getConfigurations() {
-        // SBgen: Get variable
-        return (entities);
+        lock.readLock().lock();
+        try {
+            return (entities);
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     public void clearConfigurations() {
-        entities.clear();
-        properties.clear();
+        lock.writeLock().lock();
+        try {
+            entities.clear();
+            properties.clear();
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     public Object getContext(Object currentContext, String[] context, int stacklevel) {
-        if (context == null || context.length == 0)
-            return null;
-        if (currentContext == null) {
-            Entity entity = (Entity) SwiftUtilities.getFirstStartsWith(entities, context[stacklevel]);
-            if (entity == null)
+        lock.readLock().lock();
+        try {
+            if (context == null || context.length == 0)
                 return null;
-            if (stacklevel == context.length - 1)
-                return entity;
-            return getContext(entity, context, stacklevel + 1);
-        } else {
-            Entity entity = (Entity) SwiftUtilities.getFirstStartsWith((Map) ((Entity) currentContext).getEntities(), context[stacklevel]);
-            if (entity == null)
-                return null;
-            if (stacklevel == context.length - 1)
-                return entity;
-            return getContext(entity, context, stacklevel + 1);
+            if (currentContext == null) {
+                Entity entity = (Entity) SwiftUtilities.getFirstStartsWith(entities, context[stacklevel]);
+                if (entity == null)
+                    return null;
+                if (stacklevel == context.length - 1)
+                    return entity;
+                return getContext(entity, context, stacklevel + 1);
+            } else {
+                Entity entity = (Entity) SwiftUtilities.getFirstStartsWith((Map) ((Entity) currentContext).getEntities(), context[stacklevel]);
+                if (entity == null)
+                    return null;
+                if (stacklevel == context.length - 1)
+                    return entity;
+                return getContext(entity, context, stacklevel + 1);
+            }
+        } finally {
+            lock.readLock().unlock();
         }
+
     }
 
     private String stateToString(int state) {
@@ -129,7 +125,7 @@ public class RouterConfigInstance extends EntityList {
     }
 
     private String[] dirSwiftlets() {
-        ArrayList al = new ArrayList();
+        List al = new ArrayList();
         al.add(TreeCommands.RESULT);
         al.add("Swiftlet Name       State    Description");
         al.add("-------------------------------------------------------------");
@@ -153,7 +149,7 @@ public class RouterConfigInstance extends EntityList {
     }
 
     private String[] dirEntityList(EntityList list) {
-        ArrayList al = new ArrayList();
+        List al = new ArrayList();
         al.add(TreeCommands.RESULT);
         al.add("Entity List: " + list.getDisplayName());
         al.add("Description: " + list.getDescription());
@@ -181,7 +177,7 @@ public class RouterConfigInstance extends EntityList {
                 stripped.add(entity.getName());
         }
 
-        ArrayList al = new ArrayList();
+        List al = new ArrayList();
         al.add(TreeCommands.RESULT);
         al.add("Entity List: " + list.getDisplayName());
         al.add("Description: " + list.getDescription());
@@ -197,7 +193,7 @@ public class RouterConfigInstance extends EntityList {
     }
 
     private String[] dirEntity(Entity entity) {
-        ArrayList al = new ArrayList();
+        List al = new ArrayList();
         al.add(TreeCommands.RESULT);
         al.add("Entity:      " + entity.getDisplayName());
         al.add("Description: " + entity.getDescription());
@@ -241,7 +237,7 @@ public class RouterConfigInstance extends EntityList {
     }
 
     private String[] dirEntity(Entity entity, Authenticator authenticator) {
-        ArrayList al = new ArrayList();
+        List al = new ArrayList();
         al.add(TreeCommands.RESULT);
         al.add("Entity:      " + entity.getDisplayName());
         al.add("Description: " + entity.getDescription());
@@ -291,7 +287,6 @@ public class RouterConfigInstance extends EntityList {
 
     private String[] dirContext(Object context, String[] cmd) {
         if (context == null || cmd.length == 2 && cmd[1].equals("/"))
-            //return dirSwiftlets();
             return dirEntity(this);
         if (context instanceof EntityList)
             return dirEntityList((EntityList) context);
@@ -301,7 +296,6 @@ public class RouterConfigInstance extends EntityList {
 
     private String[] dirContext(String[] ctx, Object context, String[] cmd, Authenticator authenticator) {
         if (context == null || cmd.length == 2 && cmd[1].equals("/"))
-            //return dirSwiftlets();
             return dirEntity(this, authenticator);
         if (context instanceof EntityList)
             return dirEntityList((EntityList) context, authenticator);
@@ -425,63 +419,69 @@ public class RouterConfigInstance extends EntityList {
 
     @Override
     public String toJson() {
-        StringBuffer s = new StringBuffer();
-        s.append("{");
-        s.append(quote("nodetype")).append(": ");
-        s.append(quote("root")).append(", ");
-        s.append(quote("name")).append(": ");
-        s.append(quote(SwiftletManager.getInstance().getRouterName())).append(", ");
-        s.append(quote("hasChilds")).append(": ");
-        s.append(entities != null && entities.size() > 0);
-        if (entities != null) {
-            s.append(", ");
-            s.append(quote("entities")).append(": ");
-            s.append("[");
-            boolean first = true;
-            for (Object o : entities.entrySet()) {
-                if (!first)
-                    s.append(", ");
-                first = false;
-                Entity e = (Entity) ((Map.Entry) o).getValue();
-                s.append("{");
-                s.append(quote("nodetype")).append(": ");
-                if (e instanceof EntityList)
-                    s.append(quote("entitylist")).append(", ");
-                else
-                    s.append(quote("entity")).append(", ");
-                s.append(quote("name")).append(": ");
-                s.append(quote(e.getName())).append(", ");
-                s.append(quote("displayName")).append(": ");
-                s.append(quote(e.getDisplayName())).append(", ");
-                s.append(quote("description")).append(": ");
-                s.append(quote(e.getDescription())).append(", ");
-                s.append(quote("hasChilds")).append(": ");
-                s.append(e.getEntities() != null && e.getEntities().size() > 0);
-                s.append("}");
-
-            }
-            s.append("]");
-        }
-        if (commandRegistry != null && commandRegistry.getCommands() != null) {
-            s.append(", ");
-            s.append(quote("commands")).append(": ");
-            s.append("[");
-            List cmds = commandRegistry.getCommands();
-            boolean first = true;
-            for (int i = 0; i < cmds.size(); i++) {
-                Command command = (Command) cmds.get(i);
-                if (commandIncluded(command, new String[]{"help", "sum", "show template"})) {
-                    if (!first) {
+        lock.readLock().lock();
+        try {
+            StringBuffer s = new StringBuffer();
+            s.append("{");
+            s.append(quote("nodetype")).append(": ");
+            s.append(quote("root")).append(", ");
+            s.append(quote("name")).append(": ");
+            s.append(quote(SwiftletManager.getInstance().getRouterName())).append(", ");
+            s.append(quote("hasChilds")).append(": ");
+            s.append(entities != null && entities.size() > 0);
+            if (entities != null) {
+                s.append(", ");
+                s.append(quote("entities")).append(": ");
+                s.append("[");
+                boolean first = true;
+                for (Object o : entities.entrySet()) {
+                    if (!first)
                         s.append(", ");
-                    }
                     first = false;
-                    s.append(((Command) cmds.get(i)).toJson());
+                    Entity e = (Entity) ((Map.Entry) o).getValue();
+                    s.append("{");
+                    s.append(quote("nodetype")).append(": ");
+                    if (e instanceof EntityList)
+                        s.append(quote("entitylist")).append(", ");
+                    else
+                        s.append(quote("entity")).append(", ");
+                    s.append(quote("name")).append(": ");
+                    s.append(quote(e.getName())).append(", ");
+                    s.append(quote("displayName")).append(": ");
+                    s.append(quote(e.getDisplayName())).append(", ");
+                    s.append(quote("description")).append(": ");
+                    s.append(quote(e.getDescription())).append(", ");
+                    s.append(quote("hasChilds")).append(": ");
+                    s.append(e.getEntities() != null && e.getEntities().size() > 0);
+                    s.append("}");
+
                 }
+                s.append("]");
             }
-            s.append("]");
+            if (commandRegistry != null && commandRegistry.getCommands() != null) {
+                s.append(", ");
+                s.append(quote("commands")).append(": ");
+                s.append("[");
+                List cmds = commandRegistry.getCommands();
+                boolean first = true;
+                for (int i = 0; i < cmds.size(); i++) {
+                    Command command = (Command) cmds.get(i);
+                    if (commandIncluded(command, new String[]{"help", "sum", "show template"})) {
+                        if (!first) {
+                            s.append(", ");
+                        }
+                        first = false;
+                        s.append(((Command) cmds.get(i)).toJson());
+                    }
+                }
+                s.append("]");
+            }
+            s.append("}");
+            return s.toString();
+        } finally {
+            lock.readLock().unlock();
         }
-        s.append("}");
-        return s.toString();
+
 
     }
 }

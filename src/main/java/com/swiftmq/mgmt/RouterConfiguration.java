@@ -20,13 +20,13 @@ package com.swiftmq.mgmt;
 public class RouterConfiguration {
     private static RouterConfigInstance instance = null;
 
-    public static RouterConfigInstance Singleton() {
+    public synchronized static RouterConfigInstance Singleton() {
         if (instance == null)
             instance = new RouterConfigInstance();
         return (instance);
     }
 
-    public static void removeInstance() {
+    public synchronized static void removeInstance() {
         if (instance != null) {
             instance.clearConfigurations();
             instance = null;
