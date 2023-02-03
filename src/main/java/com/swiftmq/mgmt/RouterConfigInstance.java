@@ -47,6 +47,16 @@ public class RouterConfigInstance extends EntityList {
         return MgmtFactory.CONFIGINSTANCE;
     }
 
+    public void setCommandRegistry(CommandRegistry commandRegistry) {
+        lock.writeLock().lock();
+        try {
+            this.commandRegistry = commandRegistry;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
+    }
+
     public void addEntity(Entity entity)
             throws EntityAddException {
         Entity config = entity;
