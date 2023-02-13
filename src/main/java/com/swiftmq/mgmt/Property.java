@@ -366,6 +366,7 @@ public class Property implements Dumpable {
      */
     public void setValue(Object value)
             throws InvalidValueException, InvalidTypeException, PropertyChangeException {
+        PropertyChangeListener listener = null;
         lock.writeLock().lock();
         try {
             if (value != null) {
@@ -385,12 +386,13 @@ public class Property implements Dumpable {
                 if (type != String.class)
                     throw new InvalidValueException("Null values are only possible for String types");
             }
-            if (propertyChangeListener != null)
-                propertyChangeListener.propertyChanged(this, this.value, value);
             this.value = value;
+            listener = propertyChangeListener;
         } finally {
             lock.writeLock().unlock();
         }
+        if (listener != null)
+            listener.propertyChanged(this, this.value, value);
         notifyPropertyWatchListeners();
     }
 
@@ -817,19 +819,25 @@ public class Property implements Dumpable {
 
     }
 
-    private void notifyPropertyWatchListeners() {
+    private List copyOf(List in) {
         lock.readLock().lock();
         try {
-            if (watchListeners == null)
-                return;
-            for (Object watchListener : watchListeners) {
-                PropertyWatchListener l = (PropertyWatchListener) watchListener;
-                l.propertyValueChanged(this);
-            }
+            List out = new ArrayList();
+            if (in != null)
+                out.addAll(in);
+            return out;
         } finally {
             lock.readLock().unlock();
         }
 
+    }
+
+    private void notifyPropertyWatchListeners() {
+        List copy = copyOf(watchListeners);
+        for (Object watchListener : copy) {
+            PropertyWatchListener l = (PropertyWatchListener) watchListener;
+            l.propertyValueChanged(this);
+        }
     }
 
     /**

@@ -775,13 +775,15 @@ public class Entity implements Dumpable {
      */
     public void addEntity(Entity entity)
             throws EntityAddException {
+        EntityAddListener listener = null;
         lock.readLock().lock();
         try {
-            if (entityAddListener != null)
-                entityAddListener.onEntityAdd(this, entity);
+            listener = entityAddListener;
         } finally {
             lock.readLock().unlock();
         }
+        if (listener != null)
+            listener.onEntityAdd(this, entity);
         entity.setParent(this);
 
         lock.writeLock().lock();
@@ -805,13 +807,15 @@ public class Entity implements Dumpable {
             throws EntityRemoveException {
         if (entity == null)
             return;
+        EntityRemoveListener listener;
         lock.readLock().lock();
         try {
-            if (entityRemoveListener != null)
-                entityRemoveListener.onEntityRemove(this, entity);
+            listener = entityRemoveListener;
         } finally {
             lock.readLock().unlock();
         }
+        if (listener != null)
+            listener.onEntityRemove(this, entity);
 
         lock.writeLock().lock();
         try {
@@ -1046,18 +1050,21 @@ public class Entity implements Dumpable {
 
     }
 
-    protected void notifyEntityWatchListeners(boolean entityAdded, Entity entity) {
-        if (watchListeners == null)
-            return;
-        List cloned = null;
+    private List copyOf(List in) {
         lock.readLock().lock();
         try {
-            cloned = (List) ((ArrayList) watchListeners).clone();
+            List out = new ArrayList();
+            if (in != null)
+                out.addAll(in);
+            return out;
         } finally {
             lock.readLock().unlock();
         }
+    }
 
-        IntStream.range(0, cloned.size()).mapToObj(i -> (EntityWatchListener) watchListeners.get(i)).forEach(l -> {
+    protected void notifyEntityWatchListeners(boolean entityAdded, Entity entity) {
+        List copy = copyOf(watchListeners);
+        IntStream.range(0, copy.size()).mapToObj(i -> (EntityWatchListener) watchListeners.get(i)).forEach(l -> {
             if (entityAdded)
                 l.entityAdded(this, entity);
             else

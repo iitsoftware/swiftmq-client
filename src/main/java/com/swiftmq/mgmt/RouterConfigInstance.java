@@ -68,13 +68,15 @@ public class RouterConfigInstance extends EntityList {
             lock.writeLock().unlock();
         }
 
+        EntityAddListener listener = null;
         lock.readLock().lock();
         try {
-            if (entityAddListener != null)
-                config = entityAddListener.onConfigurationAdd(this, entity);
+            listener = entityAddListener;
         } finally {
             lock.readLock().unlock();
         }
+        if (listener != null)
+            config = listener.onConfigurationAdd(this, entity);
 
         notifyEntityWatchListeners(true, config);
     }
