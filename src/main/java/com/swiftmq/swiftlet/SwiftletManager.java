@@ -120,7 +120,7 @@ public class SwiftletManager {
     long memCollectInterval = 10000;
     boolean smartTree = true;
     boolean startup = false;
-    boolean rebooting = false;
+    volatile boolean rebooting = false;
     boolean workingDirAdded = false;
     boolean registerShutdownHook = Boolean.valueOf(System.getProperty(PROP_SHUTDOWN_HOOK, "true"));
     boolean quietMode = false;
@@ -759,6 +759,8 @@ public class SwiftletManager {
      * @param delay A reboot delay in ms
      */
     public void reboot(long delay) {
+        if (rebooting)
+            return;
         rebooting = true;
         try {
             Thread.sleep(delay);
