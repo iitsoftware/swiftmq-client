@@ -15,14 +15,14 @@ public class Processor {
     private static void checkAndApplyPreconfig(String preconfig, String configFilename) throws Exception {
         Document routerConfig = XMLUtilities.createDocument(new FileInputStream(configFilename));
         if (preconfig != null && preconfig.trim().length() > 0) {
+            XMLUtilities.writeDocument(routerConfig, configFilename + fmt.format(new Date()));
             StringTokenizer t = new StringTokenizer(preconfig, ",");
             while (t.hasMoreTokens()) {
                 String pc = t.nextToken();
-                XMLUtilities.writeDocument(routerConfig, configFilename + fmt.format(new Date()));
                 routerConfig = new PreConfigurator(routerConfig, XMLUtilities.createDocument(new FileInputStream(pc))).applyChanges();
-                XMLUtilities.writeDocument(routerConfig, configFilename);
                 System.out.println("Applied changes from preconfig file: " + pc);
             }
+            XMLUtilities.writeDocument(routerConfig, configFilename);
         }
     }
 
