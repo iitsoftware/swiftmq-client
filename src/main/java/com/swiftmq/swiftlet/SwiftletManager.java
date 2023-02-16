@@ -120,7 +120,7 @@ public class SwiftletManager {
     long memCollectInterval = 10000;
     boolean smartTree = true;
     boolean startup = false;
-    boolean rebooting = false;
+    volatile boolean rebooting = false;
     boolean workingDirAdded = false;
     boolean registerShutdownHook = Boolean.valueOf(System.getProperty(PROP_SHUTDOWN_HOOK, "true"));
     boolean quietMode = false;
@@ -196,6 +196,8 @@ public class SwiftletManager {
 
     private void startUpSwiftlet(Swiftlet swiftlet, Configuration config) throws SwiftletException {
         System.out.println("... startup: " + config.getMetaData().getDisplayName());
+        if (logSwiftlet != null)
+            logSwiftlet.logInformation("SwiftletManager", "Swiftlet starting: " + swiftlet.getName() + " ...");
         if (swiftlet.isKernel()) {
             trace("Swiftlet " + swiftlet.getName() + "', fireSwiftletManagerEvent: swiftletStartInitiated");
             fireSwiftletManagerEvent(swiftlet.getName(), "swiftletStartInitiated", new SwiftletManagerEvent(this, swiftlet.getName()));
@@ -203,6 +205,8 @@ public class SwiftletManager {
         }
         swiftlet.startup(config);
         swiftlet.setState(Swiftlet.STATE_ACTIVE);
+        if (logSwiftlet != null)
+            logSwiftlet.logInformation("SwiftletManager", "Swiftlet started: " + swiftlet.getName());
         if (swiftlet.isKernel()) {
             trace("Swiftlet " + swiftlet.getName() + "', fireSwiftletManagerEvent: swiftletStarted");
             fireSwiftletManagerEvent(swiftlet.getName(), "swiftletStarted", new SwiftletManagerEvent(this, swiftlet.getName()));
@@ -386,8 +390,7 @@ public class SwiftletManager {
     }
 
     public String getLastSwiftlet() {
-        Object[] arr = swiftletTable.keySet().toArray();
-        return (String) arr[arr.length - 1];
+        return kernelSwiftletNames[kernelSwiftletNames.length - 1];
     }
 
     /**
@@ -733,19 +736,6 @@ public class SwiftletManager {
 
         fillSwiftletTable();
         startKernelSwiftlets();
-        Set keySet = swiftletTable.keySet();
-        for (Object aKeySet : keySet) {
-            String name = (String) aKeySet;
-            Swiftlet swiftlet = (Swiftlet) swiftletTable.get(name);
-            if (swiftlet.getState() == Swiftlet.STATE_ACTIVE) {
-                Configuration config = (Configuration) RouterConfiguration.Singleton().getConfigurations().get(name);
-                if (config != null) {
-                    MetaData meta = config.getMetaData();
-                    if (meta != null)
-                        logSwiftlet.logInformation("SwiftletManager", "Swiftlet started: " + meta);
-                }
-            }
-        }
         trace("Init swiftlets successful");
         memoryMeter.start();
         startup = false;
@@ -769,6 +759,8 @@ public class SwiftletManager {
      * @param delay A reboot delay in ms
      */
     public void reboot(long delay) {
+        if (rebooting)
+            return;
         rebooting = true;
         try {
             Thread.sleep(delay);
@@ -862,7 +854,6 @@ public class SwiftletManager {
 
     private void stopAllSwiftlets() {
         trace("stopAllSwiftlets");
-        logSwiftlet.logInformation("SwiftletManager", "stopAllSwiftlets");
         List al = new ArrayList();
         synchronized (sSemaphore) {
             for (Object o : RouterConfiguration.Singleton().getConfigurations().entrySet()) {
@@ -882,14 +873,12 @@ public class SwiftletManager {
         for (Object anAl : al) {
             Swiftlet swiftlet = (Swiftlet) anAl;
             trace("stopAllSwiftlets: Stopping swiftlet '" + swiftlet.getName() + "'");
-            logSwiftlet.logInformation("SwiftletManager", "stopAllSwiftlets: Stopping swiftlet '" + swiftlet.getName() + "'");
             try {
                 shutdownSwiftlet(swiftlet);
             } catch (SwiftletException ignored) {
             }
             swiftlet.setStartupTime(-1);
             trace("stopAllSwiftlets: Swiftlet " + swiftlet.getName() + " has been stopped");
-            logSwiftlet.logInformation("SwiftletManager", "stopAllSwiftlets: Swiftlet " + swiftlet.getName() + " has been stopped");
         }
     }
 

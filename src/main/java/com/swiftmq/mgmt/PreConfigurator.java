@@ -132,10 +132,13 @@ public class PreConfigurator {
                     break;
                 case "add":
                     copy.remove(copy.attribute(OP));
-                    if (!isParent)
-                        configEle.getParent().add(copy);
-                    else
-                        configEle.add(copy);
+                    if (!isParent) {
+                        if (findElement(changeEle, configEle.getParent()) == null)  // Add if not exists
+                            configEle.getParent().add(copy);
+                    } else {
+                        if (findElement(changeEle, configEle) == null)  // Add if not exists
+                            configEle.add(copy);
+                    }
                     goDeeper = false;
                     break;
                 case "remove":

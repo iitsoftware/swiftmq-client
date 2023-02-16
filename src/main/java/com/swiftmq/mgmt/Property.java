@@ -24,12 +24,13 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.stream.IntStream;
 
 /**
  * A Property object is part of an Entity. It consists of a name and a value and
- * further meta data like min/max etc.
- *
- * @author IIT GmbH, Bremen/Germany, Copyright (c) 2000-2002, All Rights Reserved
+ * further meta-data like min/max etc.
  */
 public class Property implements Dumpable {
     String name = null;
@@ -45,11 +46,11 @@ public class Property implements Dumpable {
     Comparable minValue = null;
     Comparable maxValue = null;
     Object defaultValue = null;
-    ArrayList possibleValues = null;
-    ArrayList possibleValueDescriptions = null;
+    List possibleValues = null;
+    List possibleValueDescriptions = null;
     transient PropertyChangeListener propertyChangeListener;
-    transient ArrayList watchListeners = null;
-
+    transient List watchListeners = null;
+    ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
     /**
      * Creates a new Property.
@@ -57,7 +58,6 @@ public class Property implements Dumpable {
      * @param name property name.
      */
     public Property(String name) {
-        // SBgen: Assign variable
         this.name = name;
     }
 
@@ -113,7 +113,7 @@ public class Property implements Dumpable {
         return null;
     }
 
-    private void writeList(DataOutput out, ArrayList vl, Class type) throws IOException {
+    private void writeList(DataOutput out, List vl, Class type) throws IOException {
         if (vl == null)
             out.writeByte(0);
         else {
@@ -125,11 +125,11 @@ public class Property implements Dumpable {
         }
     }
 
-    private ArrayList readDump(DataInput in, Class type) throws IOException {
+    private List readDump(DataInput in, Class type) throws IOException {
         byte set = in.readByte();
         if (set == 1) {
             int size = in.readInt();
-            ArrayList vl = new ArrayList();
+            List vl = new ArrayList();
             for (int i = 0; i < size; i++) {
                 vl.add(readValue(in, type));
             }
@@ -138,7 +138,7 @@ public class Property implements Dumpable {
         return null;
     }
 
-    private void writeList(DataOutput out, ArrayList vl) throws IOException {
+    private void writeList(DataOutput out, List vl) throws IOException {
         if (vl == null)
             out.writeByte(0);
         else {
@@ -150,7 +150,7 @@ public class Property implements Dumpable {
         }
     }
 
-    private ArrayList readList(DataInput in) throws IOException {
+    private List readList(DataInput in) throws IOException {
         byte set = in.readByte();
         if (set == 1) {
             int size = in.readInt();
@@ -171,15 +171,15 @@ public class Property implements Dumpable {
             if (type == String.class)
                 out.writeUTF((String) v);
             else if (type == Boolean.class)
-                out.writeBoolean(Boolean.valueOf(v.toString()).booleanValue());
+                out.writeBoolean(Boolean.parseBoolean(v.toString()));
             else if (type == Double.class)
-                out.writeDouble(Double.valueOf(v.toString()).doubleValue());
+                out.writeDouble(Double.parseDouble(v.toString()));
             else if (type == Integer.class)
-                out.writeInt(Integer.valueOf(v.toString()).intValue());
+                out.writeInt(Integer.parseInt(v.toString()));
             else if (type == Long.class)
-                out.writeLong(Long.valueOf(v.toString()).longValue());
+                out.writeLong(Long.parseLong(v.toString()));
             else if (type == Float.class)
-                out.writeFloat(Float.valueOf(v.toString()).floatValue());
+                out.writeFloat(Float.parseFloat(v.toString()));
         }
     }
 
@@ -190,44 +190,55 @@ public class Property implements Dumpable {
             if (type == String.class)
                 v = in.readUTF();
             else if (type == Boolean.class)
-                v = new Boolean(in.readBoolean());
+                v = in.readBoolean();
             else if (type == Double.class)
-                v = new Double(in.readDouble());
+                v = in.readDouble();
             else if (type == Integer.class)
-                v = new Integer(in.readInt());
+                v = in.readInt();
             else if (type == Long.class)
-                v = new Long(in.readLong());
+                v = in.readLong();
             else if (type == Float.class)
-                v = new Float(in.readFloat());
+                v = in.readFloat();
         }
         return v;
     }
 
-    public synchronized void writeContent(DataOutput out)
+    public void writeContent(DataOutput out)
             throws IOException {
-        writeDump(out, name);
-        writeDump(out, displayName);
-        writeDump(out, description);
-        writeDump(out, type.getName());
-        out.writeBoolean(readOnly);
-        out.writeBoolean(mandatory);
-        out.writeBoolean(rebootRequired);
-        out.writeBoolean(storable);
-        writeValue(out, value, type);
-        writeValue(out, minValue, type);
-        writeValue(out, maxValue, type);
-        writeValue(out, defaultValue, type);
-        writeList(out, possibleValues, type);
-        writeList(out, possibleValueDescriptions);
+        lock.readLock().lock();
+        try {
+            writeDump(out, name);
+            writeDump(out, displayName);
+            writeDump(out, description);
+            writeDump(out, type.getName());
+            out.writeBoolean(readOnly);
+            out.writeBoolean(mandatory);
+            out.writeBoolean(rebootRequired);
+            out.writeBoolean(storable);
+            writeValue(out, value, type);
+            writeValue(out, minValue, type);
+            writeValue(out, maxValue, type);
+            writeValue(out, defaultValue, type);
+            writeList(out, possibleValues, type);
+            writeList(out, possibleValueDescriptions);
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     public void readContent(DataInput in)
             throws IOException {
+        lock.writeLock().lock();
         try {
             name = readDump(in);
             displayName = readDump(in);
             description = readDump(in);
-            type = Class.forName(readDump(in));
+            try {
+                type = Class.forName(readDump(in));
+            } catch (ClassNotFoundException e) {
+                throw new RuntimeException(e);
+            }
             readOnly = in.readBoolean();
             mandatory = in.readBoolean();
             rebootRequired = in.readBoolean();
@@ -238,10 +249,10 @@ public class Property implements Dumpable {
             defaultValue = readValue(in, type);
             possibleValues = readDump(in, type);
             possibleValueDescriptions = readList(in);
-        } catch (ClassNotFoundException e) {
-            e.printStackTrace();
-            throw new IOException(e.toString());
+        } finally {
+            lock.writeLock().unlock();
         }
+
     }
 
     /**
@@ -250,8 +261,13 @@ public class Property implements Dumpable {
      * @return name.
      */
     public String getName() {
-        // SBgen: Get variable
-        return (name);
+        lock.readLock().lock();
+        try {
+            return (name);
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     /**
@@ -260,8 +276,13 @@ public class Property implements Dumpable {
      * @return display name.
      */
     public String getDisplayName() {
-        // SBgen: Get variable
-        return (displayName);
+        lock.readLock().lock();
+        try {
+            return (displayName);
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     /**
@@ -270,8 +291,13 @@ public class Property implements Dumpable {
      * @param displayName display name.
      */
     public void setDisplayName(String displayName) {
-        // SBgen: Assign variable
-        this.displayName = displayName;
+        lock.writeLock().lock();
+        try {
+            this.displayName = displayName;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     /**
@@ -280,8 +306,13 @@ public class Property implements Dumpable {
      * @return description.
      */
     public String getDescription() {
-        // SBgen: Get variable
-        return (description);
+        lock.readLock().lock();
+        try {
+            return (description);
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     /**
@@ -290,8 +321,13 @@ public class Property implements Dumpable {
      * @param description description.
      */
     public void setDescription(String description) {
-        // SBgen: Assign variable
-        this.description = description;
+        lock.writeLock().lock();
+        try {
+            this.description = description;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     private boolean isInPossibleList(Object v) {
@@ -299,14 +335,7 @@ public class Property implements Dumpable {
             return true;
         if (v == null)
             return false;
-        boolean rc = false;
-        for (int i = 0; i < possibleValues.size(); i++) {
-            if (((Comparable) possibleValues.get(i)).compareTo(v) == 0) {
-                rc = true;
-                break;
-            }
-        }
-        return rc;
+        return IntStream.range(0, possibleValues.size()).anyMatch(i -> ((Comparable) possibleValues.get(i)).compareTo(v) == 0);
     }
 
     /**
@@ -314,10 +343,16 @@ public class Property implements Dumpable {
      *
      * @return value.
      */
-    public synchronized Object getValue() {
-        if (value != null)
-            return value;
-        return defaultValue;
+    public Object getValue() {
+        lock.readLock().lock();
+        try {
+            if (value != null)
+                return value;
+            return defaultValue;
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     /**
@@ -329,29 +364,35 @@ public class Property implements Dumpable {
      * @throws InvalidTypeException    if the value doesn't match the property type.
      * @throws PropertyChangeException thrown by a PropertyChangeListener.
      */
-    public synchronized void setValue(Object value)
+    public void setValue(Object value)
             throws InvalidValueException, InvalidTypeException, PropertyChangeException {
-        if (value != null) {
-            if (type == null)
-                throw new InvalidTypeException("no type set");
-            if (type != value.getClass())
-                throw new InvalidTypeException("invalid type for value; does not match " + type);
-            if (minValue != null && minValue.compareTo(value) > 0)
-                throw new InvalidValueException("invalid value, must be >= " + minValue);
-            if (maxValue != null && maxValue.compareTo(value) < 0)
-                throw new InvalidValueException("invalid value, must be <= " + maxValue);
-            if (!isInPossibleList(value))
-                throw new InvalidValueException("invalid value, must be in " + possibleValues);
-        } else {
-            if (mandatory && defaultValue == null)
-                throw new InvalidValueException("Property is mandatory, value can't be null");
-            if (type != String.class)
-                throw new InvalidValueException("Null values are only possible for String types");
+        PropertyChangeListener listener = null;
+        lock.writeLock().lock();
+        try {
+            if (value != null) {
+                if (type == null)
+                    throw new InvalidTypeException("no type set");
+                if (type != value.getClass())
+                    throw new InvalidTypeException("invalid type for value; does not match " + type);
+                if (minValue != null && minValue.compareTo(value) > 0)
+                    throw new InvalidValueException("invalid value, must be >= " + minValue);
+                if (maxValue != null && maxValue.compareTo(value) < 0)
+                    throw new InvalidValueException("invalid value, must be <= " + maxValue);
+                if (!isInPossibleList(value))
+                    throw new InvalidValueException("invalid value, must be in " + possibleValues);
+            } else {
+                if (mandatory && defaultValue == null)
+                    throw new InvalidValueException("Property is mandatory, value can't be null");
+                if (type != String.class)
+                    throw new InvalidValueException("Null values are only possible for String types");
+            }
+            this.value = value;
+            listener = propertyChangeListener;
+        } finally {
+            lock.writeLock().unlock();
         }
-        if (propertyChangeListener != null)
-            propertyChangeListener.propertyChanged(this, this.value, value);
-        // SBgen: Assign variable
-        this.value = value;
+        if (listener != null)
+            listener.propertyChanged(this, this.value, value);
         notifyPropertyWatchListeners();
     }
 
@@ -361,8 +402,13 @@ public class Property implements Dumpable {
      * @return type.
      */
     public Class getType() {
-        // SBgen: Get variable
-        return (type);
+        lock.readLock().lock();
+        try {
+            return (type);
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     /**
@@ -373,16 +419,22 @@ public class Property implements Dumpable {
      * @throws InvalidTypeException if not Boolean, Double, Integer, Long, String, Float.
      */
     public void setType(Class type) throws InvalidTypeException {
-        if (type == null ||
-                type == Boolean.class ||
-                type == Double.class ||
-                type == Integer.class ||
-                type == Long.class ||
-                type == String.class ||
-                type == Float.class)
-            this.type = type;
-        else
-            throw new InvalidTypeException("invalid type; must be of Boolean, Double, Integer, Long, Float, String");
+        lock.writeLock().lock();
+        try {
+            if (type == null ||
+                    type == Boolean.class ||
+                    type == Double.class ||
+                    type == Integer.class ||
+                    type == Long.class ||
+                    type == String.class ||
+                    type == Float.class)
+                this.type = type;
+            else
+                throw new InvalidTypeException("invalid type; must be of Boolean, Double, Integer, Long, Float, String");
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     /**
@@ -391,8 +443,13 @@ public class Property implements Dumpable {
      * @return true/false.
      */
     public boolean isReadOnly() {
-        // SBgen: Get variable
-        return (readOnly);
+        lock.readLock().lock();
+        try {
+            return (readOnly);
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     /**
@@ -402,24 +459,39 @@ public class Property implements Dumpable {
      * @param readOnly true/false.
      */
     public void setReadOnly(boolean readOnly) {
-        // SBgen: Assign variable
-        this.readOnly = readOnly;
+        lock.writeLock().lock();
+        try {
+            this.readOnly = readOnly;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     /**
      * Internal use only.
      */
     public boolean isStorable() {
-        // SBgen: Get variable
-        return (storable);
+        lock.readLock().lock();
+        try {
+            return (storable);
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     /**
      * Internal use only.
      */
     public void setStorable(boolean storable) {
-        // SBgen: Assign variable
-        this.storable = storable;
+        lock.writeLock().lock();
+        try {
+            this.storable = storable;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     /**
@@ -428,8 +500,13 @@ public class Property implements Dumpable {
      * @return true/false.
      */
     public boolean isRebootRequired() {
-        // SBgen: Get variable
-        return (rebootRequired);
+        lock.readLock().lock();
+        try {
+            return (rebootRequired);
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     /**
@@ -439,8 +516,13 @@ public class Property implements Dumpable {
      * @param rebootRequired true/false.
      */
     public void setRebootRequired(boolean rebootRequired) {
-        // SBgen: Assign variable
-        this.rebootRequired = rebootRequired;
+        lock.writeLock().lock();
+        try {
+            this.rebootRequired = rebootRequired;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     /**
@@ -449,8 +531,13 @@ public class Property implements Dumpable {
      * @return true/false.
      */
     public boolean isMandatory() {
-        // SBgen: Get variable
-        return (mandatory);
+        lock.readLock().lock();
+        try {
+            return (mandatory);
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     /**
@@ -462,8 +549,13 @@ public class Property implements Dumpable {
      * @param mandatory true/false.
      */
     public void setMandatory(boolean mandatory) {
-        // SBgen: Assign variable
-        this.mandatory = mandatory;
+        lock.writeLock().lock();
+        try {
+            this.mandatory = mandatory;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     /**
@@ -472,8 +564,13 @@ public class Property implements Dumpable {
      * @return min value.
      */
     public Comparable getMinValue() {
-        // SBgen: Get variable
-        return (minValue);
+        lock.readLock().lock();
+        try {
+            return (minValue);
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     /**
@@ -485,9 +582,15 @@ public class Property implements Dumpable {
      */
     public void setMinValue(Comparable minValue)
             throws InvalidTypeException {
-        if (type == null)
-            throw new InvalidTypeException("type not set");
-        this.minValue = minValue;
+        lock.writeLock().lock();
+        try {
+            if (type == null)
+                throw new InvalidTypeException("type not set");
+            this.minValue = minValue;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     /**
@@ -496,8 +599,13 @@ public class Property implements Dumpable {
      * @return max value.
      */
     public Comparable getMaxValue() {
-        // SBgen: Get variable
-        return (maxValue);
+        lock.readLock().lock();
+        try {
+            return (maxValue);
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     /**
@@ -509,9 +617,15 @@ public class Property implements Dumpable {
      */
     public void setMaxValue(Comparable maxValue)
             throws InvalidTypeException {
-        if (type == null)
-            throw new InvalidTypeException("type not set");
-        this.maxValue = maxValue;
+        lock.writeLock().lock();
+        try {
+            if (type == null)
+                throw new InvalidTypeException("type not set");
+            this.maxValue = maxValue;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     /**
@@ -519,9 +633,14 @@ public class Property implements Dumpable {
      *
      * @return list of possible values.
      */
-    public ArrayList getPossibleValues() {
-        // SBgen: Get variable
-        return (possibleValues);
+    public List getPossibleValues() {
+        lock.readLock().lock();
+        try {
+            return possibleValues;
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     /**
@@ -531,18 +650,23 @@ public class Property implements Dumpable {
      * @param possibleValues list of possible values.
      * @throws InvalidTypeException if a type is not set or a type in the list doesn't match the Property type.
      */
-    public void setPossibleValues(ArrayList possibleValues)
+    public void setPossibleValues(List possibleValues)
             throws InvalidTypeException {
-        if (type == null)
-            throw new InvalidTypeException("type not set");
-        if (possibleValues != null) {
-            for (int i = 0; i < possibleValues.size(); i++) {
-                Object value = possibleValues.get(i);
-                if (value != null && type != value.getClass())
-                    throw new InvalidTypeException("invalid type for value '" + value + "'; does not match " + type);
+        lock.writeLock().lock();
+        try {
+            if (type == null)
+                throw new InvalidTypeException("type not set");
+            if (possibleValues != null) {
+                for (Object value : possibleValues) {
+                    if (value != null && type != value.getClass())
+                        throw new InvalidTypeException("invalid type for value '" + value + "'; does not match " + type);
+                }
             }
+            this.possibleValues = possibleValues;
+        } finally {
+            lock.writeLock().unlock();
         }
-        this.possibleValues = possibleValues;
+
     }
 
     /**
@@ -550,9 +674,14 @@ public class Property implements Dumpable {
      *
      * @return list of descriptions.
      */
-    public ArrayList getPossibleValueDescriptions() {
-        // SBgen: Get variable
-        return (possibleValueDescriptions);
+    public List getPossibleValueDescriptions() {
+        lock.readLock().lock();
+        try {
+            return possibleValueDescriptions;
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     /**
@@ -561,9 +690,14 @@ public class Property implements Dumpable {
      *
      * @param possibleValueDescriptions list of descriptions.
      */
-    public void setPossibleValueDescriptions(ArrayList possibleValueDescriptions) {
-        // SBgen: Assign variable
-        this.possibleValueDescriptions = possibleValueDescriptions;
+    public void setPossibleValueDescriptions(List possibleValueDescriptions) {
+        lock.writeLock().lock();
+        try {
+            this.possibleValueDescriptions = possibleValueDescriptions;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     /**
@@ -572,8 +706,13 @@ public class Property implements Dumpable {
      * @return default value.
      */
     public Object getDefaultValue() {
-        // SBgen: Get variable
-        return defaultValue;
+        lock.readLock().lock();
+        try {
+            return defaultValue;
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     /**
@@ -582,7 +721,13 @@ public class Property implements Dumpable {
      * @param defaultValue default value.
      */
     public void setDefaultValue(Object defaultValue) {
-        this.defaultValue = defaultValue;
+        lock.writeLock().lock();
+        try {
+            this.defaultValue = defaultValue;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     /**
@@ -592,14 +737,20 @@ public class Property implements Dumpable {
      * @param defaultProp default Property.
      */
     public void setDefaultProp(Property defaultProp) {
-        if (defaultProp != null) {
-            defaultValue = defaultProp.getValue();
-            defaultProp.addPropertyWatchListener(new PropertyWatchListener() {
-                public void propertyValueChanged(Property p) {
-                    defaultValue = p.getValue();
-                }
-            });
+        lock.writeLock().lock();
+        try {
+            if (defaultProp != null) {
+                defaultValue = defaultProp.getValue();
+                defaultProp.addPropertyWatchListener(new PropertyWatchListener() {
+                    public void propertyValueChanged(Property p) {
+                        defaultValue = p.getValue();
+                    }
+                });
+            }
+        } finally {
+            lock.writeLock().unlock();
         }
+
     }
 
     /**
@@ -608,7 +759,13 @@ public class Property implements Dumpable {
      * @return the listener.
      */
     public PropertyChangeListener getPropertyChangeListener() {
-        return propertyChangeListener;
+        lock.readLock().lock();
+        try {
+            return propertyChangeListener;
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     /**
@@ -618,8 +775,13 @@ public class Property implements Dumpable {
      * @param propertyChangeListener the listener.
      */
     public void setPropertyChangeListener(PropertyChangeListener propertyChangeListener) {
-        // SBgen: Assign variable
-        this.propertyChangeListener = propertyChangeListener;
+        lock.writeLock().lock();
+        try {
+            this.propertyChangeListener = propertyChangeListener;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     /**
@@ -628,10 +790,16 @@ public class Property implements Dumpable {
      *
      * @param l the listener.
      */
-    public synchronized void addPropertyWatchListener(PropertyWatchListener l) {
-        if (watchListeners == null)
-            watchListeners = new ArrayList();
-        watchListeners.add(l);
+    public void addPropertyWatchListener(PropertyWatchListener l) {
+        lock.writeLock().lock();
+        try {
+            if (watchListeners == null)
+                watchListeners = new ArrayList();
+            watchListeners.add(l);
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
 
@@ -640,16 +808,34 @@ public class Property implements Dumpable {
      *
      * @param l the listener.
      */
-    public synchronized void removePropertyWatchListener(PropertyWatchListener l) {
-        if (watchListeners != null)
-            watchListeners.remove(l);
+    public void removePropertyWatchListener(PropertyWatchListener l) {
+        lock.writeLock().lock();
+        try {
+            if (watchListeners != null)
+                watchListeners.remove(l);
+        } finally {
+            lock.writeLock().unlock();
+        }
+
+    }
+
+    private List copyOf(List in) {
+        lock.readLock().lock();
+        try {
+            List out = new ArrayList();
+            if (in != null)
+                out.addAll(in);
+            return out;
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     private void notifyPropertyWatchListeners() {
-        if (watchListeners == null)
-            return;
-        for (int i = 0; i < watchListeners.size(); i++) {
-            PropertyWatchListener l = (PropertyWatchListener) watchListeners.get(i);
+        List copy = copyOf(watchListeners);
+        for (Object watchListener : copy) {
+            PropertyWatchListener l = (PropertyWatchListener) watchListener;
             l.propertyValueChanged(this);
         }
     }
@@ -660,13 +846,23 @@ public class Property implements Dumpable {
      * @return parent Entity.
      */
     public Entity getParent() {
-        // SBgen: Get variable
-        return (parent);
+        lock.readLock().lock();
+        try {
+            return (parent);
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     protected void setParent(Entity parent) {
-        // SBgen: Assign variable
-        this.parent = parent;
+        lock.writeLock().lock();
+        try {
+            this.parent = parent;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     /**
@@ -675,21 +871,27 @@ public class Property implements Dumpable {
      * @return copy.
      */
     public Property createCopy() {
-        Property prop = new Property(name);
-        prop.displayName = displayName;
-        prop.description = description;
-        prop.type = type;
-        prop.readOnly = readOnly;
-        prop.mandatory = mandatory;
-        prop.rebootRequired = rebootRequired;
-        prop.storable = storable;
-        prop.value = value;
-        prop.minValue = minValue;
-        prop.maxValue = maxValue;
-        prop.defaultValue = defaultValue;
-        prop.possibleValues = possibleValues;
-        prop.possibleValueDescriptions = possibleValueDescriptions;
-        return prop;
+        lock.readLock().lock();
+        try {
+            Property prop = new Property(name);
+            prop.displayName = displayName;
+            prop.description = description;
+            prop.type = type;
+            prop.readOnly = readOnly;
+            prop.mandatory = mandatory;
+            prop.rebootRequired = rebootRequired;
+            prop.storable = storable;
+            prop.value = value;
+            prop.minValue = minValue;
+            prop.maxValue = maxValue;
+            prop.defaultValue = defaultValue;
+            prop.possibleValues = possibleValues;
+            prop.possibleValueDescriptions = possibleValueDescriptions;
+            return prop;
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     private String escapeJsonControls(String s) {
@@ -701,95 +903,107 @@ public class Property implements Dumpable {
     }
 
     public String toJson() {
-        StringBuffer s = new StringBuffer();
-        s.append("{");
-        s.append(quote("name")).append(": ");
-        s.append(quote(name)).append(", ");
-        s.append(quote("displayName")).append(": ");
-        s.append(quote(displayName)).append(", ");
-        s.append(quote("description")).append(": ");
-        s.append(quote(description)).append(", ");
-        s.append(quote("type")).append(": ");
-        s.append(quote(type.getSimpleName())).append(", ");
-        s.append(quote("readOnly")).append(": ");
-        s.append(readOnly).append(", ");
-        s.append(quote("mandatory")).append(": ");
-        s.append(mandatory).append(", ");
-        s.append(quote("rebootRequired")).append(": ");
-        s.append(rebootRequired);
-        if (value != null) {
-            s.append(", ");
-            s.append(quote("value")).append(": ");
-            if (value instanceof String)
-                s.append(quote((String) value));
-            else
-                s.append(value);
-        }
-        if (minValue != null) {
-            s.append(", ");
-            s.append(quote("minValue")).append(": ");
-            s.append(minValue);
-        }
-        if (maxValue != null) {
-            s.append(", ");
-            s.append(quote("maxValue")).append(": ");
-            s.append(maxValue);
-        }
-        if (defaultValue != null) {
-            s.append(", ");
-            s.append(quote("defaultValue")).append(": ");
-            if (type == String.class)
-                s.append(quote((String) defaultValue));
-            else
-                s.append(defaultValue);
-        }
-        if (possibleValues != null) {
-            s.append(", ");
-            s.append(quote("possibleValues")).append(": ");
-            s.append("[");
-            for (int i = 0; i < possibleValues.size(); i++) {
-                if (i > 0)
-                    s.append(", ");
-                s.append(quote(possibleValues.get(i).toString()));
+        lock.readLock().lock();
+        try {
+            StringBuffer s = new StringBuffer();
+            s.append("{");
+            s.append(quote("name")).append(": ");
+            s.append(quote(name)).append(", ");
+            s.append(quote("displayName")).append(": ");
+            s.append(quote(displayName)).append(", ");
+            s.append(quote("description")).append(": ");
+            s.append(quote(description)).append(", ");
+            s.append(quote("type")).append(": ");
+            s.append(quote(type.getSimpleName())).append(", ");
+            s.append(quote("readOnly")).append(": ");
+            s.append(readOnly).append(", ");
+            s.append(quote("mandatory")).append(": ");
+            s.append(mandatory).append(", ");
+            s.append(quote("rebootRequired")).append(": ");
+            s.append(rebootRequired);
+            if (value != null) {
+                s.append(", ");
+                s.append(quote("value")).append(": ");
+                if (value instanceof String)
+                    s.append(quote((String) value));
+                else
+                    s.append(value);
             }
-            s.append("]");
+            if (minValue != null) {
+                s.append(", ");
+                s.append(quote("minValue")).append(": ");
+                s.append(minValue);
+            }
+            if (maxValue != null) {
+                s.append(", ");
+                s.append(quote("maxValue")).append(": ");
+                s.append(maxValue);
+            }
+            if (defaultValue != null) {
+                s.append(", ");
+                s.append(quote("defaultValue")).append(": ");
+                if (type == String.class)
+                    s.append(quote((String) defaultValue));
+                else
+                    s.append(defaultValue);
+            }
+            if (possibleValues != null) {
+                s.append(", ");
+                s.append(quote("possibleValues")).append(": ");
+                s.append("[");
+                for (int i = 0; i < possibleValues.size(); i++) {
+                    if (i > 0)
+                        s.append(", ");
+                    s.append(quote(possibleValues.get(i).toString()));
+                }
+                s.append("]");
+            }
+            s.append("}");
+            return s.toString();
+        } finally {
+            lock.readLock().unlock();
         }
-        s.append("}");
-        return s.toString();
+
     }
 
     public String toString() {
-        StringBuffer s = new StringBuffer();
-        s.append("[Property, name=");
-        s.append(name);
-        s.append(", displayName=");
-        s.append(displayName);
-        s.append(", description=");
-        s.append(description);
-        s.append(", type=");
-        s.append(type);
-        s.append(", value=");
-        s.append(value);
-        s.append(", readOnly=");
-        s.append(readOnly);
-        s.append(", storable=");
-        s.append(storable);
-        s.append(", mandatory=");
-        s.append(mandatory);
-        s.append(", rebootRequired=");
-        s.append(rebootRequired);
-        s.append(", minValue=");
-        s.append(minValue);
-        s.append(", maxValue=");
-        s.append(maxValue);
-        s.append(", possibleValues=");
-        s.append(possibleValues);
-        s.append(", possibleValueDescriptions=");
-        s.append(possibleValueDescriptions);
-        s.append(", defaultValue=");
-        s.append(defaultValue);
-        s.append("]");
-        return s.toString();
+        lock.readLock().lock();
+        try {
+            StringBuffer s = new StringBuffer();
+            s.append("[Property, name=");
+            s.append(name);
+            s.append(", displayName=");
+            s.append(displayName);
+            s.append(", description=");
+            s.append(description);
+            s.append(", type=");
+            s.append(type);
+            s.append(", value=");
+            s.append(value);
+            s.append(", readOnly=");
+            s.append(readOnly);
+            s.append(", storable=");
+            s.append(storable);
+            s.append(", mandatory=");
+            s.append(mandatory);
+            s.append(", rebootRequired=");
+            s.append(rebootRequired);
+            s.append(", minValue=");
+            s.append(minValue);
+            s.append(", maxValue=");
+            s.append(maxValue);
+            s.append(", possibleValues=");
+            s.append(possibleValues);
+            s.append(", possibleValueDescriptions=");
+            s.append(possibleValueDescriptions);
+            s.append(", defaultValue=");
+            s.append(defaultValue);
+            s.append("]");
+            return s.toString();
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 }
 
