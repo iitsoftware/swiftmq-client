@@ -518,6 +518,15 @@ public abstract class AbstractQueue {
     public void resetCounters() {
     }
 
+    /**
+     * Returns the average queue latency and resets it
+     *
+     * @return average queue latency
+     */
+    public long getAndResetAverageLatency() {
+        return (0);
+    }
+
     public int getMonitorAlertThreshold() {
         return -1;
     }
