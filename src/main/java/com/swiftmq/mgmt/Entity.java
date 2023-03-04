@@ -850,7 +850,7 @@ public class Entity implements Dumpable {
      */
     public void removeDynamicEntity(Object dynamicObject) {
         Entity entity = null;
-        lock.readLock().lock();
+        lock.writeLock().lock();
         try {
             for (Iterator iter = entities.entrySet().iterator(); iter.hasNext(); ) {
                 entity = (Entity) ((Map.Entry) iter.next()).getValue();
@@ -862,7 +862,7 @@ public class Entity implements Dumpable {
                 }
             }
         } finally {
-            lock.readLock().unlock();
+            lock.writeLock().unlock();
         }
 
         if (entity != null)
