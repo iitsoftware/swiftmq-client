@@ -28,7 +28,7 @@ import com.swiftmq.swiftlet.net.event.ConnectionListener;
  * @author IIT GmbH, Bremen/Germany, Copyright (c) 2000-2002, All Rights Reserved
  */
 public class IntraVMListenerMetaData extends ConnectionMetaData {
-    private static final int DEFAULT_SIZE = 10 * 1024;
+    private static final int DEFAULT_SIZE = 128 * 1024;
     /**
      * Constructs a new IntraVMListenerMetaData with default SMQP protocol handlers.
      *
