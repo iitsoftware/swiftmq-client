@@ -62,7 +62,7 @@ public class ConnectionMetaData {
                                  int inputBufferSize, int inputExtendSize, int outputBufferSize, int outputExtendSize, boolean useTcpNoDelay) {
         this(swiftlet, keepAliveInterval, socketFactoryClass, connectionListener,
                 inputBufferSize, inputExtendSize, outputBufferSize, outputExtendSize, useTcpNoDelay,
-                new SMQPInputHandler(), new SMQPOutputHandler());
+                new SMQPInputHandler(), new SMQPOutputHandler(outputBufferSize, outputExtendSize));
     }
 
     /**

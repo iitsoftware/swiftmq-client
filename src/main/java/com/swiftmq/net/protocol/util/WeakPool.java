@@ -1,4 +1,4 @@
-package com.swiftmq.tools.gc;
+package com.swiftmq.net.protocol.util;
 
 import java.lang.ref.WeakReference;
 import java.util.concurrent.ConcurrentLinkedQueue;

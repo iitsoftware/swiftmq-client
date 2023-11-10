@@ -18,7 +18,7 @@
 package com.swiftmq.net.protocol.smqp;
 
 import com.swiftmq.net.protocol.ProtocolOutputHandler;
-import com.swiftmq.tools.collection.FragmentedOutputStream;
+import com.swiftmq.net.protocol.util.FragmentedOutputStream;
 
 /**
  * A SMQPOutputHandler handles SMQP output.
@@ -28,7 +28,6 @@ import com.swiftmq.tools.collection.FragmentedOutputStream;
  */
 
 public class SMQPOutputHandler extends ProtocolOutputHandler {
-    private final static int DEFAULT_BUFFER_SIZE = 1400; // MTU Size
     private final FragmentedOutputStream fragmentedOutputStream;
     private FragmentedOutputStream.Fragment currentFragment = null;
     private int currentOffset = 0;
@@ -37,15 +36,6 @@ public class SMQPOutputHandler extends ProtocolOutputHandler {
 
     public SMQPOutputHandler(int bufferSize, int extendSize) {
         fragmentedOutputStream = new FragmentedOutputStream(bufferSize, true);
-    }
-
-    public SMQPOutputHandler() {
-        this(DEFAULT_BUFFER_SIZE, DEFAULT_BUFFER_SIZE);
-    }
-
-    @Override
-    public ProtocolOutputHandler create() {
-        return new SMQPOutputHandler();
     }
 
     @Override

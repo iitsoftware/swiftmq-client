@@ -74,14 +74,6 @@ public abstract class ProtocolOutputHandler extends OutputStream {
      * Factory method to create a new ProtocolOutputHandler.
      * For example, a RawOutputHandler returns a RawOutputHandler here.
      *
-     * @return new protocol input handler.
-     */
-    public abstract ProtocolOutputHandler create();
-
-    /**
-     * Factory method to create a new ProtocolOutputHandler.
-     * For example, a RawOutputHandler returns a RawOutputHandler here.
-     *
      * @param bufferSize initial buffer size
      * @param extendSize extend size
      * @return new protocol input handler.

@@ -15,9 +15,7 @@
  *
  */
 
-package com.swiftmq.tools.collection;
-
-import com.swiftmq.tools.gc.WeakPool;
+package com.swiftmq.net.protocol.util;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
