@@ -21,8 +21,6 @@ import com.swiftmq.net.protocol.ChunkListener;
 import com.swiftmq.net.protocol.ProtocolInputHandler;
 
 import java.nio.ByteBuffer;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 
 /**
  * A SMQPInputHandler handles SMQP input.
@@ -30,23 +28,14 @@ import java.util.Date;
  * @author IIT GmbH, Bremen/Germany, Copyright (c) 2000-2002, All Rights Reserved
  */
 public class SMQPInputHandler implements ProtocolInputHandler {
-    static final boolean debug = Boolean.valueOf(System.getProperty("swiftmq.smqp.handler.debug", "false")).booleanValue();
-    static final SimpleDateFormat format = new SimpleDateFormat("dd.MM.yyyy-HH:mm:ss.SSS");
-
     ChunkListener listener = null;
-    int initialSize = 0;
-    int ensureSize = 0;
     byte[] lengthField = new byte[4];
     byte[] buffer = null;
     ByteBuffer byteBuffer = null;
     int bufferOffset = 0;
     boolean lengthComplete = false;
     int lengthByteCount = 0;
-    int chunkMissed = 0;
     int chunkLength = 0;
-    int chunkStart = 0;
-    int lengthFieldPos = 0;
-    long gclen = 0;
 
     public ProtocolInputHandler create() {
         return new SMQPInputHandler();
@@ -57,30 +46,23 @@ public class SMQPInputHandler implements ProtocolInputHandler {
     }
 
     public void createInputBuffer(int initialSize, int ensureSize) {
-        this.initialSize = initialSize;
-        this.ensureSize = ensureSize;
-        buffer = new byte[initialSize];
+        // Initialize the lengthField buffer and the associated ByteBuffer.
+        buffer = lengthField;
         byteBuffer = ByteBuffer.wrap(buffer);
-        if (debug)
-            System.out.println(format.format(new Date()) + "/" + super.toString() + ", createInputBuffer, len=" + buffer.length);
+        // Reset the offset to 0 as we are starting to read a new length field.
+        bufferOffset = 0;
+        // Reset the byte count for the length field as we haven't read any part of the length yet.
+        lengthByteCount = 0;
+        // Indicate that we're not complete with the length field.
+        lengthComplete = false;
     }
 
     public ByteBuffer getByteBuffer() {
-        getBuffer();
         byteBuffer.position(bufferOffset);
         return byteBuffer;
     }
 
     public byte[] getBuffer() {
-        if (buffer.length - bufferOffset < ensureSize) {
-            gclen += buffer.length;
-            byte[] b = new byte[buffer.length + ensureSize];
-            System.arraycopy(buffer, 0, b, 0, bufferOffset);
-            buffer = b;
-            byteBuffer = ByteBuffer.wrap(buffer);
-            if (debug)
-                System.out.println(format.format(new Date()) + "/" + super.toString() + ", extend buffer, gced=" + gclen + ", len=" + buffer.length);
-        }
         return buffer;
     }
 
@@ -99,39 +81,27 @@ public class SMQPInputHandler implements ProtocolInputHandler {
 
     public void setBytesWritten(int written) {
         if (lengthComplete) {
-            if (written >= chunkMissed) {
-                listener.chunkCompleted(buffer, chunkStart, chunkLength);
-                written -= chunkMissed;
-                bufferOffset += chunkMissed;
+            bufferOffset += written;
+            // If we have read as many bytes as the chunkLength, the chunk is complete.
+            if (bufferOffset == chunkLength) {
+                listener.chunkCompleted(buffer, 0, chunkLength);
                 lengthComplete = false;
                 lengthByteCount = 0;
-                chunkMissed = 0;
-                if (written > 0) {
-                    lengthFieldPos = chunkStart + chunkLength;
-                    setBytesWritten(written);
-                } else {
-                    bufferOffset = 0;
-                    lengthFieldPos = 0;
-                }
-            } else {
-                bufferOffset += written;
-                chunkMissed -= written;
+                bufferOffset = 0; // Reset bufferOffset for the next length/chunk read.
+                buffer = lengthField;
+                byteBuffer = ByteBuffer.wrap(buffer);
             }
         } else {
-            if (lengthByteCount + written >= 4) {
-                int rest = 4 - lengthByteCount;
-                chunkLength = readLength(buffer, lengthFieldPos);
-                bufferOffset += rest;
-                chunkStart = bufferOffset;
-                chunkMissed = chunkLength;
-                written -= rest;
-                lengthByteCount = 4;
+            lengthByteCount += written;
+            bufferOffset += written;
+            // Check if we have completed the length field
+            if (lengthByteCount == 4) {
+                chunkLength = readLength(buffer, 0); // Assuming lengthFieldPos is always 0 here
+                buffer = new byte[chunkLength];
+                byteBuffer = ByteBuffer.wrap(buffer);
                 lengthComplete = true;
-                if (written > 0)
-                    setBytesWritten(written);
-            } else {
-                bufferOffset += written;
-                lengthByteCount += written;
+                bufferOffset = 0; // Reset bufferOffset for the chunk read.
+                lengthByteCount = 0; // Reset lengthByteCount for the next length read.
             }
         }
     }
