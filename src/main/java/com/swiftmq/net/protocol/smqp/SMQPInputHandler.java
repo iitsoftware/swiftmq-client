@@ -31,6 +31,7 @@ public class SMQPInputHandler implements ProtocolInputHandler {
     ChunkListener listener = null;
     byte[] lengthField = new byte[4];
     byte[] buffer = null;
+    byte[] prevBuffer = null;
     ByteBuffer byteBuffer = null;
     int bufferOffset = 0;
     boolean lengthComplete = false;
@@ -88,6 +89,7 @@ public class SMQPInputHandler implements ProtocolInputHandler {
                 lengthComplete = false;
                 lengthByteCount = 0;
                 bufferOffset = 0; // Reset bufferOffset for the next length/chunk read.
+                prevBuffer = buffer;
                 buffer = lengthField;
                 byteBuffer = ByteBuffer.wrap(buffer);
             }
@@ -97,7 +99,10 @@ public class SMQPInputHandler implements ProtocolInputHandler {
             // Check if we have completed the length field
             if (lengthByteCount == 4) {
                 chunkLength = readLength(buffer, 0); // Assuming lengthFieldPos is always 0 here
-                buffer = new byte[chunkLength];
+                if (prevBuffer != null && prevBuffer.length == chunkLength)
+                    buffer = prevBuffer;
+                else
+                    buffer = new byte[chunkLength];
                 byteBuffer = ByteBuffer.wrap(buffer);
                 lengthComplete = true;
                 bufferOffset = 0; // Reset bufferOffset for the chunk read.
