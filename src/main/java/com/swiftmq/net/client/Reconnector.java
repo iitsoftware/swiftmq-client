@@ -17,9 +17,12 @@
 
 package com.swiftmq.net.client;
 
+import com.swiftmq.tools.concurrent.Semaphore;
+
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public abstract class Reconnector {
     List servers = null;
@@ -33,6 +36,8 @@ public abstract class Reconnector {
     boolean closed = false;
     boolean firstConnectAttempt = true;
     String debugString = null;
+    ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+    Semaphore waitSem = new Semaphore();
 
     protected Reconnector(List servers, Map parameters, boolean enabled, int maxRetries, long retryDelay, boolean debug) {
         this.servers = servers;
@@ -71,52 +76,68 @@ public abstract class Reconnector {
 
     protected abstract Connection createConnection(ServerEntry entry, Map parameters);
 
-    public synchronized Connection getConnection() {
-        if (debug) System.out.println(dbg() + ", getConnection ...");
-        int nRetries = -1;
-        while (!closed && active == null && nRetries < maxRetries) {
-            if (retryDelay > 0 && !firstConnectAttempt) {
-                try {
+    public Connection getConnection() {
+        lock.readLock().lock();
+        try {
+            if (debug) System.out.println(dbg() + ", getConnection ...");
+            int nRetries = -1;
+            while (!closed && active == null && nRetries < maxRetries) {
+                if (retryDelay > 0 && !firstConnectAttempt) {
                     if (debug)
                         System.out.println(dbg() + ", nRetries=" + nRetries + ", waiting " + retryDelay + " ms ...");
-                    wait(retryDelay);
-                } catch (InterruptedException e) {
+                    waitSem.waitHere(retryDelay);
+                    waitSem.reset();
                 }
+                if (currentPos == servers.size())
+                    currentPos = 0;
+                ServerEntry entry = (ServerEntry) servers.get(currentPos++);
+                if (debug)
+                    System.out.println(dbg() + ", nRetries=" + nRetries + ", attempt to create connection to: " + entry);
+                active = createConnection(entry, parameters);
+                if (debug)
+                    System.out.println(dbg() + ", nRetries=" + nRetries + ", createConnection returns " + active);
+                if (active == null) {
+                    if (!enabled)
+                        break;
+                    nRetries++;
+                }
+                firstConnectAttempt = false;
             }
-            if (currentPos == servers.size())
-                currentPos = 0;
-            ServerEntry entry = (ServerEntry) servers.get(currentPos++);
-            if (debug)
-                System.out.println(dbg() + ", nRetries=" + nRetries + ", attempt to create connection to: " + entry);
-            active = createConnection(entry, parameters);
-            if (debug) System.out.println(dbg() + ", nRetries=" + nRetries + ", createConnection returns " + active);
-            if (active == null) {
-                if (!enabled)
-                    break;
-                nRetries++;
-            }
-            firstConnectAttempt = false;
+            if (debug) System.out.println(dbg() + ", getConnection returns " + active);
+            return active;
+        } finally {
+            lock.readLock().unlock();
         }
-        if (debug) System.out.println(dbg() + ", getConnection returns " + active);
-        return active;
+
     }
 
-    public synchronized void invalidateConnection() {
-        if (debug) System.out.println(dbg() + ", invalidateConnection, active=" + active);
-        if (active != null) {
-            active.close();
-            active = null;
+    public void invalidateConnection() {
+        lock.writeLock().lock();
+        try {
+            if (debug) System.out.println(dbg() + ", invalidateConnection, active=" + active);
+            if (active != null) {
+                active.close();
+                active = null;
+            }
+        } finally {
+            lock.writeLock().unlock();
         }
+
     }
 
-    public synchronized void close() {
-        if (debug) System.out.println(dbg() + ", close, active=" + active);
-        closed = true;
-        if (active != null) {
-            active.close();
-            active = null;
+    public void close() {
+        lock.writeLock().lock();
+        try {
+            if (debug) System.out.println(dbg() + ", close, active=" + active);
+            closed = true;
+            if (active != null) {
+                active.close();
+                active = null;
+            }
+        } finally {
+            lock.writeLock().unlock();
         }
-        notify();
+        waitSem.notifySingleWaiter();
     }
 
     public String toString() {

@@ -18,25 +18,26 @@
 package com.swiftmq.tools.util;
 
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class IdGenerator {
-    long randomId = 0;
-    long id = 0;
+    final AtomicLong randomId = new AtomicLong();
+    final AtomicLong id = new AtomicLong();
 
     private IdGenerator() {
         Random random = new Random();
-        randomId = random.nextLong();
+        randomId.set(random.nextLong());
     }
 
     public static IdGenerator getInstance() {
         return InstanceHolder.instance;
     }
 
-    public synchronized String nextId(char delimiter) {
+    public String nextId(char delimiter) {
         StringBuffer b = new StringBuffer();
-        b.append(randomId);
+        b.append(randomId.get());
         b.append(delimiter);
-        b.append(id++);
+        b.append(id.getAndIncrement());
         return b.toString();
     }
 

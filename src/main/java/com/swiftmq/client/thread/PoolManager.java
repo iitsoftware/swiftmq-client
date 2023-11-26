@@ -19,27 +19,28 @@ package com.swiftmq.client.thread;
 
 import com.swiftmq.swiftlet.threadpool.ThreadPool;
 
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
+
 public abstract class PoolManager {
-    private static PoolManager _instance = null;
+    private static final AtomicReference<PoolManager> _instance = new AtomicReference<>();
 
     protected PoolManager() {
     }
 
-    public static synchronized void reset() {
-        _instance = null;
+    public static void reset() {
+        _instance.set(null);
     }
 
-    public static synchronized void setIntraVM(boolean intraVM) {
-        if (_instance == null) {
-            if (intraVM)
-                _instance = new IntraVMPoolManager();
-            else
-                _instance = new DefaultPoolManager();
-        }
+    public static void setIntraVM(boolean intraVM) {
+        // Use compareAndSet for thread-safe lazy initialization
+        _instance.updateAndGet(currentInstance -> {
+            return Objects.requireNonNullElseGet(currentInstance, () -> intraVM ? new IntraVMPoolManager() : new DefaultPoolManager());
+        });
     }
 
-    public static synchronized PoolManager getInstance() {
-        return _instance;
+    public static PoolManager getInstance() {
+        return _instance.get();
     }
 
     public abstract ThreadPool getConnectorPool();
@@ -48,3 +49,4 @@ public abstract class PoolManager {
 
     public abstract ThreadPool getSessionPool();
 }
+

@@ -21,7 +21,10 @@ import com.swiftmq.swiftlet.Swiftlet;
 import com.swiftmq.swiftlet.routing.event.RoutingEvent;
 import com.swiftmq.swiftlet.routing.event.RoutingListener;
 
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * The RoutingSwiftlet manages connections as well as message routing
@@ -30,138 +33,67 @@ import java.util.*;
  * @author IIT GmbH, Bremen/Germany, Copyright (c) 2000-2002, All Rights Reserved
  */
 public abstract class RoutingSwiftlet extends Swiftlet {
-    Map routingTable = new HashMap();
-    ArrayList listeners = new ArrayList();
+    private final Map<String, Route> routingTable = new ConcurrentHashMap<>();
+    private final List<RoutingListener> listeners = new CopyOnWriteArrayList<>();
 
-
-    /**
-     * Returns a route for a remote router.
-     *
-     * @param destination router name.
-     * @return route.
-     */
     public Route getRoute(String destination) {
-        Route route = null;
-        synchronized (routingTable) {
-            route = (Route) routingTable.get(destination);
-        }
-        return route;
+        return routingTable.get(destination);
     }
 
-
-    /**
-     * Returns all available routes.
-     *
-     * @return routes.
-     */
     public Route[] getRoutes() {
-        Route[] routes = null;
-        synchronized (routingTable) {
-            if (routingTable.size() > 0) {
-                routes = new Route[routingTable.size()];
-                Set set = routingTable.entrySet();
-                Iterator iter = set.iterator();
-                int i = 0;
-                while (iter.hasNext())
-                    routes[i++] = (Route) ((Map.Entry) iter.next()).getValue();
-            }
+        Route[] routes = new Route[routingTable.size()];
+        int i = 0;
+        for (Route route : routingTable.values()) {
+            routes[i++] = route;
         }
         return routes;
     }
 
-
-    /**
-     * Adds a route.
-     *
-     * @param route route.
-     */
     protected void addRoute(Route route) {
-        synchronized (routingTable) {
-            routingTable.put(route.getDestination(), route);
-        }
+        routingTable.put(route.getDestination(), route);
         fireRoutingEvent("destinationAdded", new RoutingEvent(this, route.getDestination()));
     }
 
-
-    /**
-     * Removes a route.
-     *
-     * @param route route.
-     */
     protected void removeRoute(Route route) {
-        synchronized (routingTable) {
-            routingTable.remove(route.getDestination());
-        }
+        routingTable.remove(route.getDestination());
         fireRoutingEvent("destinationRemoved", new RoutingEvent(this, route.getDestination()));
     }
 
-
-    /**
-     * Removes all routes.
-     */
     protected void removeAllRoutes() {
-        Route[] routes = getRoutes();
-        if (routes != null) {
-            for (int i = 0; i < routes.length; i++)
-                removeRoute(routes[i]);
+        for (Route route : routingTable.values()) {
+            removeRoute(route);
         }
     }
 
-
-    /**
-     * Adds a routing listener.
-     *
-     * @param l listener.
-     */
     public void addRoutingListener(RoutingListener l) {
-        synchronized (listeners) {
-            listeners.add(l);
-        }
+        listeners.add(l);
     }
 
-    /**
-     * Removes a routing listener.
-     *
-     * @param l listener.
-     */
     public void removeRoutingListener(RoutingListener l) {
-        synchronized (listeners) {
-            listeners.remove(l);
-        }
+        listeners.remove(l);
     }
 
-    /**
-     * Removes all routing listeners.
-     */
     protected void removeAllRoutingListeners() {
-        synchronized (listeners) {
-            listeners.clear();
-        }
+        listeners.clear();
     }
 
-
-    /**
-     * Fires a routing event.
-     * Internal use only.
-     *
-     * @param method method to call.
-     * @param evt    event.
-     */
     public void fireRoutingEvent(String method, RoutingEvent evt) {
-        synchronized (listeners) {
-            for (int i = 0; i < listeners.size(); i++) {
-                RoutingListener l = (RoutingListener) listeners.get(i);
-                if (method.equals("destinationAdded")) {
+        for (RoutingListener l : listeners) {
+            switch (method) {
+                case "destinationAdded":
                     l.destinationAdded(evt);
-                } else if (method.equals("destinationRemoved")) {
+                    break;
+                case "destinationRemoved":
                     l.destinationRemoved(evt);
-                } else if (method.equals("destinationActivated")) {
+                    break;
+                case "destinationActivated":
                     l.destinationActivated(evt);
-                } else if (method.equals("destinationDeactivated")) {
+                    break;
+                case "destinationDeactivated":
                     l.destinationDeactivated(evt);
-                }
+                    break;
+                // other cases as needed
             }
         }
     }
 }
-

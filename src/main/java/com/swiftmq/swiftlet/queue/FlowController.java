@@ -17,6 +17,9 @@
 
 package com.swiftmq.swiftlet.queue;
 
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+
 /**
  * Abstract base class for flow controllers. A flow controller computes a delay,
  * dependent on throughput, queue backlog, and transaction size.
@@ -24,14 +27,14 @@ package com.swiftmq.swiftlet.queue;
  * @author IIT GmbH, Bremen/Germany, Copyright (c) 2000-2002, All Rights Reserved
  */
 public abstract class FlowController {
-    protected int receiverCount = 0;
-    protected int queueSize = 0;
-    protected long lastDelay = 0;
-    protected long sentCount = 0;
-    protected long sentCountCalls = 0;
-    protected long receiveCount = 0;
-    protected long receiveCountCalls = 0;
-    protected long timestamp = 0;
+    protected final AtomicInteger receiverCount = new AtomicInteger();
+    protected final AtomicInteger queueSize = new AtomicInteger();
+    protected final AtomicLong lastDelay = new AtomicLong();
+    protected final AtomicLong sentCount = new AtomicLong();
+    protected final AtomicLong sentCountCalls = new AtomicLong();
+    protected final AtomicLong receiveCount = new AtomicLong();
+    protected final AtomicLong receiveCountCalls = new AtomicLong();
+    protected final AtomicLong timestamp = new AtomicLong();
 
 
     /**
@@ -48,8 +51,8 @@ public abstract class FlowController {
      *
      * @param queueSize queue size.
      */
-    public synchronized void setQueueSize(int queueSize) {
-        this.queueSize = queueSize;
+    public void setQueueSize(int queueSize) {
+        this.queueSize.set(queueSize);
     }
 
 
@@ -58,31 +61,31 @@ public abstract class FlowController {
      *
      * @param count receiver count.
      */
-    public synchronized void setReceiverCount(int count) {
+    public void setReceiverCount(int count) {
         if (count == 0) {
-            sentCount = 0;
-            sentCountCalls = 0;
-            receiveCount = 0;
-            receiveCountCalls = 0;
-            timestamp = 0;
-        } else if (receiverCount == 0 && count > 0) {
-            timestamp = System.currentTimeMillis();
-            sentCount = queueSize;
-            sentCountCalls = queueSize;
+            sentCount.set(0);
+            sentCountCalls.set(0);
+            receiveCount.set(0);
+            receiveCountCalls.set(0);
+            timestamp.set(0);
+        } else if (receiverCount.get() == 0 && count > 0) {
+            timestamp.set(System.currentTimeMillis());
+            sentCount.set(queueSize.get());
+            sentCountCalls.set(queueSize.get());
         }
-        receiverCount = count;
+        receiverCount.set(count);
     }
 
 
     /**
-     * Sets the recive message count.
+     * Sets the receive message count.
      *
-     * @param count recive message count.
+     * @param count receive message count.
      */
-    public synchronized void setReceiveMessageCount(int count) {
-        if (timestamp != 0) {
-            receiveCount += count;
-            receiveCountCalls++;
+    public void setReceiveMessageCount(int count) {
+        if (timestamp.get() != 0) {
+            receiveCount.addAndGet(count);
+            receiveCountCalls.getAndIncrement();
         }
     }
 
@@ -92,10 +95,10 @@ public abstract class FlowController {
      *
      * @param count sent message count.
      */
-    public synchronized void setSentMessageCount(int count) {
-        if (timestamp != 0) {
-            sentCount += count;
-            sentCountCalls++;
+    public void setSentMessageCount(int count) {
+        if (timestamp.get() != 0) {
+            sentCount.addAndGet(count);
+            sentCountCalls.getAndIncrement();
         }
     }
 
@@ -105,8 +108,8 @@ public abstract class FlowController {
      *
      * @return delay.
      */
-    public synchronized long getLastDelay() {
-        return lastDelay;
+    public long getLastDelay() {
+        return lastDelay.get();
     }
 
 
@@ -120,15 +123,15 @@ public abstract class FlowController {
     public String toString() {
         StringBuffer b = new StringBuffer("[FlowController, ");
         b.append("timestamp=");
-        b.append(timestamp);
+        b.append(timestamp.get());
         b.append(", receiveCount=");
-        b.append(receiveCount);
+        b.append(receiveCount.get());
         b.append(", receiveCountCalls=");
-        b.append(receiveCountCalls);
+        b.append(receiveCountCalls.get());
         b.append(", sentCount=");
-        b.append(sentCount);
+        b.append(sentCount.get());
         b.append(", sentCountCalls=");
-        b.append(sentCountCalls);
+        b.append(sentCountCalls.get());
         b.append("]");
         return b.toString();
     }

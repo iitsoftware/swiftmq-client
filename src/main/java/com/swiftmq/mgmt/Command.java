@@ -23,6 +23,8 @@ import com.swiftmq.util.SwiftUtilities;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * A Command object. Commands are
@@ -36,13 +38,13 @@ import java.io.IOException;
  * @see EntityList
  */
 public class Command implements Dumpable {
-    boolean guiEnabled;
-    boolean guiForChild;
-    String name;
-    String[] tokens;
-    String pattern;
-    String description;
-    boolean enabled;
+    final AtomicBoolean guiEnabled = new AtomicBoolean(false);
+    final AtomicBoolean guiForChild = new AtomicBoolean(false);
+    final AtomicReference<String> name = new AtomicReference<String>();
+    volatile String[] tokens = new String[0];
+    final AtomicReference<String> pattern = new AtomicReference<String>();
+    final AtomicReference<String> description = new AtomicReference<String>();
+    final AtomicBoolean enabled = new AtomicBoolean(false);
     Entity parent;
     transient CommandExecutor commandExecutor;
 
@@ -74,13 +76,13 @@ public class Command implements Dumpable {
      */
     public Command(String name, String pattern, String description, boolean enabled, CommandExecutor commandExecutor, boolean guiEnabled, boolean guiForChild) {
         // SBgen: Assign variables
-        this.name = name;
-        this.pattern = pattern;
-        this.description = description;
-        this.enabled = enabled;
+        this.name.set(name);
+        this.pattern.set(pattern);
+        this.description.set(description);
+        this.enabled.set(enabled);
         this.commandExecutor = commandExecutor;
-        this.guiEnabled = guiEnabled;
-        this.guiForChild = guiForChild;
+        this.guiEnabled.set(guiEnabled);
+        this.guiForChild.set(guiForChild);
         // SBgen: End assign
         tokens = SwiftUtilities.tokenize(name, " ");
     }
@@ -108,25 +110,25 @@ public class Command implements Dumpable {
         return null;
     }
 
-    public synchronized void writeContent(DataOutput out)
+    public void writeContent(DataOutput out)
             throws IOException {
-        writeDump(out, name);
-        writeDump(out, pattern);
-        writeDump(out, description);
-        out.writeBoolean(enabled);
-        out.writeBoolean(guiEnabled);
-        out.writeBoolean(guiForChild);
+        writeDump(out, name.get());
+        writeDump(out, pattern.get());
+        writeDump(out, description.get());
+        out.writeBoolean(enabled.get());
+        out.writeBoolean(guiEnabled.get());
+        out.writeBoolean(guiForChild.get());
     }
 
     public void readContent(DataInput in)
             throws IOException {
-        name = readDump(in);
-        pattern = readDump(in);
-        description = readDump(in);
-        enabled = in.readBoolean();
-        guiEnabled = in.readBoolean();
-        guiForChild = in.readBoolean();
-        tokens = SwiftUtilities.tokenize(name, " ");
+        name.set(readDump(in));
+        pattern.set(readDump(in));
+        description.set(readDump(in));
+        enabled.set(in.readBoolean());
+        guiEnabled.set(in.readBoolean());
+        guiForChild.set(in.readBoolean());
+        tokens = SwiftUtilities.tokenize(name.get(), " ");
     }
 
     /**
@@ -136,7 +138,7 @@ public class Command implements Dumpable {
      */
     public String getPattern() {
         // SBgen: Get variable
-        return (pattern);
+        return (pattern.get());
     }
 
 
@@ -147,7 +149,7 @@ public class Command implements Dumpable {
      */
     public String getName() {
         // SBgen: Get variable
-        return (name);
+        return (name.get());
     }
 
 
@@ -170,7 +172,7 @@ public class Command implements Dumpable {
      */
     public String getDescription() {
         // SBgen: Get variable
-        return (description);
+        return (description.get());
     }
 
     /**
@@ -180,7 +182,7 @@ public class Command implements Dumpable {
      */
     public boolean isEnabled() {
         // SBgen: Get variable
-        return (enabled);
+        return (enabled.get());
     }
 
     /**
@@ -190,7 +192,7 @@ public class Command implements Dumpable {
      */
     public void setEnabled(boolean enabled) {
         // SBgen: Assign variable
-        this.enabled = enabled;
+        this.enabled.set(enabled);
     }
 
     /**
@@ -229,7 +231,7 @@ public class Command implements Dumpable {
      * @return true/false.
      */
     public boolean isGuiEnabled() {
-        return (guiEnabled);
+        return (guiEnabled.get());
     }
 
     /**
@@ -238,7 +240,7 @@ public class Command implements Dumpable {
      * @param guiEnabled true/false.
      */
     public void setGuiEnabled(boolean guiEnabled) {
-        this.guiEnabled = guiEnabled;
+        this.guiEnabled.set(guiEnabled);
     }
 
     /**
@@ -247,7 +249,7 @@ public class Command implements Dumpable {
      * @return true/false.
      */
     public boolean isGuiForChild() {
-        return (guiForChild);
+        return (guiForChild.get());
     }
 
     /**
@@ -257,7 +259,7 @@ public class Command implements Dumpable {
      * @param guiForChild description.
      */
     public void setGuiForChild(boolean guiForChild) {
-        this.guiForChild = guiForChild;
+        this.guiForChild.set(guiForChild);
     }
 
     /**
@@ -285,11 +287,11 @@ public class Command implements Dumpable {
         StringBuffer s = new StringBuffer();
         s.append("{");
         s.append(quote("name")).append(": ");
-        s.append(quote(name)).append(", ");
+        s.append(quote(name.get())).append(", ");
         s.append(quote("description")).append(": ");
-        s.append(quote(description)).append(", ");
+        s.append(quote(description.get())).append(", ");
         s.append(quote("guiForChild")).append(": ");
-        s.append(guiForChild);
+        s.append(guiForChild.get());
         s.append("}");
         return s.toString();
     }
@@ -297,13 +299,13 @@ public class Command implements Dumpable {
     public String toString() {
         StringBuffer s = new StringBuffer();
         s.append("[Command, name=");
-        s.append(name);
+        s.append(name.get());
         s.append(", pattern=");
-        s.append(pattern);
+        s.append(pattern.get());
         s.append(", description=");
-        s.append(description);
+        s.append(description.get());
         s.append(", enabled=");
-        s.append(enabled);
+        s.append(enabled.get());
         s.append("]");
         return s.toString();
     }

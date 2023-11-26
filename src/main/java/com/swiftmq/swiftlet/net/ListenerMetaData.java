@@ -24,8 +24,8 @@ import com.swiftmq.swiftlet.net.event.ConnectionListener;
 import com.swiftmq.tools.sql.LikeComparator;
 
 import java.net.InetAddress;
-import java.util.HashSet;
-import java.util.Iterator;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * A ListenerMetaData object describes a TCP listener.
@@ -35,24 +35,8 @@ import java.util.Iterator;
 public class ListenerMetaData extends ConnectionMetaData {
     InetAddress bindAddress;
     int port;
-    HashSet hostAccessList = null;
+    Set<String> hostAccessList = ConcurrentHashMap.newKeySet();
 
-
-    /**
-     * Constructs a new ListenerMetaData.
-     *
-     * @param bindAddress        IP bind address
-     * @param port               port.
-     * @param swiftlet           Swiftlet.
-     * @param keepAliveInterval  keep alive interval.
-     * @param socketFactoryClass name of the socket factory class.
-     * @param connectionListener connection listener.
-     * @param inputBufferSize    input network buffer size
-     * @param inputExtendSize    input network extend size
-     * @param outputBufferSize   output network buffer size
-     * @param outputExtendSize   output network extend size
-     * @see package.class
-     */
     public ListenerMetaData(InetAddress bindAddress, int port, Swiftlet swiftlet, long keepAliveInterval, String socketFactoryClass, ConnectionListener connectionListener,
                             int inputBufferSize, int inputExtendSize, int outputBufferSize, int outputExtendSize) {
         super(swiftlet, keepAliveInterval, socketFactoryClass, connectionListener,
@@ -61,22 +45,6 @@ public class ListenerMetaData extends ConnectionMetaData {
         this.port = port;
     }
 
-    /**
-     * Constructs a new ListenerMetaData.
-     *
-     * @param bindAddress        IP bind address
-     * @param port               port.
-     * @param swiftlet           Swiftlet.
-     * @param keepAliveInterval  keep alive interval.
-     * @param socketFactoryClass name of the socket factory class.
-     * @param connectionListener connection listener.
-     * @param inputBufferSize    input network buffer size
-     * @param inputExtendSize    input network extend size
-     * @param outputBufferSize   output network buffer size
-     * @param outputExtendSize   output network extend size
-     * @param useTcpNoDelay      use TCP No Delay
-     * @see package.class
-     */
     public ListenerMetaData(InetAddress bindAddress, int port, Swiftlet swiftlet, long keepAliveInterval, String socketFactoryClass, ConnectionListener connectionListener,
                             int inputBufferSize, int inputExtendSize, int outputBufferSize, int outputExtendSize, boolean useTcpNoDelay) {
         super(swiftlet, keepAliveInterval, socketFactoryClass, connectionListener,
@@ -85,23 +53,6 @@ public class ListenerMetaData extends ConnectionMetaData {
         this.port = port;
     }
 
-    /**
-     * Constructs a new ListenerMetaData.
-     *
-     * @param bindAddress           IP bind address
-     * @param port                  port.
-     * @param swiftlet              Swiftlet.
-     * @param keepAliveInterval     keep alive interval.
-     * @param socketFactoryClass    name of the socket factory class.
-     * @param connectionListener    connection listener.
-     * @param inputBufferSize       input network buffer size
-     * @param inputExtendSize       input network extend size
-     * @param outputBufferSize      output network buffer size
-     * @param outputExtendSize      output network extend size
-     * @param protocolInputHandler  protocol input handler.
-     * @param protocolOutputHandler protocol output handler.
-     * @see package.class
-     */
     public ListenerMetaData(InetAddress bindAddress, int port, Swiftlet swiftlet, long keepAliveInterval, String socketFactoryClass, ConnectionListener connectionListener,
                             int inputBufferSize, int inputExtendSize, int outputBufferSize, int outputExtendSize,
                             ProtocolInputHandler protocolInputHandler, ProtocolOutputHandler protocolOutputHandler) {
@@ -111,24 +62,6 @@ public class ListenerMetaData extends ConnectionMetaData {
         this.port = port;
     }
 
-    /**
-     * Constructs a new ListenerMetaData.
-     *
-     * @param bindAddress           IP bind address
-     * @param port                  port.
-     * @param swiftlet              Swiftlet.
-     * @param keepAliveInterval     keep alive interval.
-     * @param socketFactoryClass    name of the socket factory class.
-     * @param connectionListener    connection listener.
-     * @param inputBufferSize       input network buffer size
-     * @param inputExtendSize       input network extend size
-     * @param outputBufferSize      output network buffer size
-     * @param outputExtendSize      output network extend size
-     * @param useTcpNoDelay         use TCP No Delay
-     * @param protocolInputHandler  protocol input handler.
-     * @param protocolOutputHandler protocol output handler.
-     * @see package.class
-     */
     public ListenerMetaData(InetAddress bindAddress, int port, Swiftlet swiftlet, long keepAliveInterval, String socketFactoryClass, ConnectionListener connectionListener,
                             int inputBufferSize, int inputExtendSize, int outputBufferSize, int outputExtendSize, boolean useTcpNoDelay,
                             ProtocolInputHandler protocolInputHandler, ProtocolOutputHandler protocolOutputHandler) {
@@ -139,75 +72,33 @@ public class ListenerMetaData extends ConnectionMetaData {
     }
 
 
-    /**
-     * Returns the bind address.
-     *
-     * @return bind address.
-     */
     public InetAddress getBindAddress() {
-        // SBgen: Get variable
         return (bindAddress);
     }
 
-    /**
-     * Returns the port.
-     *
-     * @return bind port.
-     */
     public int getPort() {
-        // SBgen: Get variable
         return (port);
     }
 
 
-    /**
-     * Adds a new predicate to the host access list.
-     * The predicate is a SQL Like predicate which is compared against the
-     * remote host name on connect. Only those hosts which matches at least
-     * one predicate are allowed to connect, otherwise the connection will
-     * be rejected.
-     *
-     * @param predicate SQL Like predicate.
-     */
-    public synchronized void addToHostAccessList(String predicate) {
-        if (hostAccessList == null)
-            hostAccessList = new HashSet();
+    public void addToHostAccessList(String predicate) {
         hostAccessList.add(predicate);
     }
 
-
-    /**
-     * Removes a predicate from the host access list.
-     *
-     * @param predicate SQL Like predicate.
-     */
-    public synchronized void removeFromHostAccessList(String predicate) {
-        if (hostAccessList != null)
-            hostAccessList.remove(predicate);
+    public void removeFromHostAccessList(String predicate) {
+        hostAccessList.remove(predicate);
     }
 
-
-    /**
-     * Returns if the given hostname is allowed to connect.
-     * This method compares the hostname against the host access list.
-     * Internal use only.
-     *
-     * @param hostname name of the remote host.
-     * @return true/false.
-     */
     public boolean isConnectionAllowed(String hostname) {
-        if (hostAccessList == null)
+        if (hostAccessList.isEmpty())
             return true;
         else {
-            boolean rc = false;
-            Iterator iter = hostAccessList.iterator();
-            while (iter.hasNext()) {
-                if (LikeComparator.compare(hostname, (String) iter.next(), '\\')) {
-                    rc = true;
-                    break;
+            for (String allowedHost : hostAccessList) {
+                if (LikeComparator.compare(hostname, allowedHost, '\\')) {
+                    return true;
                 }
             }
-            return rc;
+            return false;
         }
     }
 

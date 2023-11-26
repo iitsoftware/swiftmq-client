@@ -25,8 +25,8 @@ public class IntraVMPoolManager extends PoolManager {
     static final String CONNECTION_TOKEN = "sys$jms.client.connection.%";
     static final String SESSION_TOKEN = "sys$jms.client.session.%";
 
-    ThreadPool connectionPool = null;
-    ThreadPool sessionPool = null;
+    volatile ThreadPool connectionPool = null;
+    volatile ThreadPool sessionPool = null;
 
     protected IntraVMPoolManager() {
         ThreadpoolSwiftlet threadpoolSwiftlet = (ThreadpoolSwiftlet) SwiftletManager.getInstance().getSwiftlet("sys$threadpool");
@@ -34,15 +34,15 @@ public class IntraVMPoolManager extends PoolManager {
         sessionPool = threadpoolSwiftlet.getPool(SESSION_TOKEN);
     }
 
-    public synchronized ThreadPool getConnectorPool() {
+    public ThreadPool getConnectorPool() {
         return connectionPool;
     }
 
-    public synchronized ThreadPool getConnectionPool() {
+    public ThreadPool getConnectionPool() {
         return connectionPool;
     }
 
-    public synchronized ThreadPool getSessionPool() {
+    public ThreadPool getSessionPool() {
         return sessionPool;
     }
 }

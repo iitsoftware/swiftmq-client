@@ -18,18 +18,21 @@
 package com.swiftmq.tools.util;
 
 import java.io.*;
+import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class LazyUTF8String implements Serializable {
-    String s = null;
-    byte[] buffer = null;
-    int utfLength = 0;
+    private AtomicReference<String> s = new AtomicReference<>();
+    private AtomicReference<byte[]> buffer = new AtomicReference<>();
+    private int utfLength;
 
     public LazyUTF8String(DataInput in) throws IOException {
         utfLength = in.readUnsignedShort();
-        buffer = new byte[utfLength + 2];
-        in.readFully(buffer, 2, utfLength);
-        buffer[0] = (byte) ((utfLength >>> 8) & 0xFF);
-        buffer[1] = (byte) ((utfLength) & 0xFF);
+        byte[] b = new byte[utfLength + 2];
+        in.readFully(b, 2, utfLength);
+        b[0] = (byte) ((utfLength >>> 8) & 0xFF);
+        b[1] = (byte) ((utfLength) & 0xFF);
+        buffer.set(b);
     }
 
     public LazyUTF8String(String s) {
@@ -43,22 +46,22 @@ public class LazyUTF8String implements Serializable {
             e.printStackTrace();
             throw e;
         }
-        this.s = s;
+        this.s.set(s);
     }
 
     private String bufferToString() throws Exception {
-        return UTFUtils.convertFromUTF8(buffer, 2, utfLength);
+        return UTFUtils.convertFromUTF8(buffer.get(), 2, utfLength);
     }
 
     private byte[] stringToBuffer() throws Exception {
-        utfLength = UTFUtils.countUTFBytes(s);
+        utfLength = UTFUtils.countUTFBytes(s.get());
         if (utfLength > 65535)
             throw new UTFDataFormatException();
 
         byte[] b = new byte[utfLength + 2];
         int count = 0;
         count = UTFUtils.writeShortToBuffer(utfLength, b, count);
-        UTFUtils.writeUTFBytesToBuffer(s, b, count);
+        UTFUtils.writeUTFBytesToBuffer(s.get(), b, count);
         return b;
     }
 
@@ -67,37 +70,38 @@ public class LazyUTF8String implements Serializable {
     }
 
     public String getString(boolean clear) {
-        if (s == null) {
-            synchronized (this) {
-                if (s == null) {
-                    try {
-                        s = bufferToString();
-                        if (clear) {
-                            buffer = null;
-                            utfLength = 0;
-                        }
-                    } catch (Exception e) {
-                        e.printStackTrace();
+        try {
+            String currentString = s.get();
+            if (currentString == null) {
+                currentString = bufferToString();
+                if (s.compareAndSet(null, currentString)) {
+                    if (clear) {
+                        buffer.set(null);
+                        utfLength = 0;
                     }
+                } else {
+                    currentString = s.get();
                 }
             }
+            return currentString;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
-        return s;
     }
 
     public byte[] getBuffer() {
-        if (buffer == null) {
-            synchronized (this) {
-                if (buffer == null) {
-                    try {
-                        buffer = stringToBuffer();
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
+        try {
+            byte[] currentBuffer = buffer.get();
+            if (currentBuffer == null) {
+                currentBuffer = stringToBuffer();
+                if (!buffer.compareAndSet(null, currentBuffer)) {
+                    currentBuffer = buffer.get();
                 }
             }
+            return currentBuffer;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
-        return buffer;
     }
 
     public void writeContent(DataOutput out) throws IOException {
@@ -105,7 +109,7 @@ public class LazyUTF8String implements Serializable {
     }
 
     public String toString() {
-        return "[LazyUTF8String, s=" + s + ", buffer=" + buffer + "]";
+        return "[LazyUTF8String, s=" + s.get() + ", buffer=" + Arrays.toString(buffer.get()) + "]";
     }
 
 }

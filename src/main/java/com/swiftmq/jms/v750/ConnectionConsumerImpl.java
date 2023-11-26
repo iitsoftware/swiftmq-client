@@ -28,15 +28,14 @@ import com.swiftmq.swiftlet.threadpool.AsyncTask;
 import com.swiftmq.swiftlet.threadpool.ThreadPool;
 import com.swiftmq.tools.queue.SingleProcessorQueue;
 import com.swiftmq.tools.requestreply.*;
-import com.swiftmq.tools.tracking.MessageTracker;
 import com.swiftmq.tools.util.IdGenerator;
 
 import javax.jms.ConnectionConsumer;
 import javax.jms.JMSException;
 import javax.jms.ServerSession;
 import javax.jms.ServerSessionPool;
-import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 public abstract class ConnectionConsumerImpl
         implements ConnectionConsumer, RequestService, Recreatable, RequestRetryValidator {
@@ -58,7 +57,8 @@ public abstract class ConnectionConsumerImpl
     int nCurrent = 0;
     boolean closed = false;
     volatile boolean resetInProgress = false;
-    Set messagesInProgress = new HashSet();
+    Set<String> messagesInProgress = ConcurrentHashMap.newKeySet();
+
 
     public ConnectionConsumerImpl(ConnectionImpl myConnection, int dispatchId, RequestRegistry requestRegistry, ServerSessionPool serverSessionPool, int maxMessages) {
         this.myConnection = myConnection;
@@ -117,9 +117,6 @@ public abstract class ConnectionConsumerImpl
     }
 
     public void serviceRequest(Request request) {
-        if (MessageTracker.enabled) {
-            MessageTracker.getInstance().track(((AsyncMessageDeliveryRequest) request).getMessageEntry().getMessage(), new String[]{myConnection.toString(), toString()}, "serviceRequest");
-        }
         deliveryQueue.enqueue(request);
     }
 
@@ -131,36 +128,23 @@ public abstract class ConnectionConsumerImpl
     }
 
     public void removeFromDuplicateLog(MessageImpl msg) {
-        if (MessageTracker.enabled) {
-            MessageTracker.getInstance().track(msg, new String[]{myConnection.toString(), toString()}, "removeFromDuplicateLog");
-        }
         myConnection.removeFromDuplicateLog(msg.getDuplicateId());
     }
 
     public void markInProgress(MessageImpl msg, String messageId) {
         if (!myConnection.isDuplicateMessageDetection())
             return;
-        synchronized (messagesInProgress) {
             if (messageId != null) {
                 messagesInProgress.add(messageId);
-                if (MessageTracker.enabled) {
-                    MessageTracker.getInstance().track(msg, new String[]{myConnection.toString(), toString()}, "markInProgress, size=" + messagesInProgress.size());
-                }
             }
-        }
     }
 
     public void unmarkInProgress(MessageImpl msg, String messageId) {
         if (!myConnection.isDuplicateMessageDetection())
             return;
-        synchronized (messagesInProgress) {
             if (messageId != null) {
                 messagesInProgress.remove(messageId);
-                if (MessageTracker.enabled) {
-                    MessageTracker.getInstance().track(msg, new String[]{myConnection.toString(), toString()}, "unmarkInProgress, size=" + messagesInProgress.size());
-                }
             }
-        }
     }
 
     private void checkInProgress(MessageImpl msg, String messageId) {
@@ -168,12 +152,7 @@ public abstract class ConnectionConsumerImpl
             return;
         boolean inProgress = false;
         do {
-            synchronized (messagesInProgress) {
                 inProgress = messagesInProgress.contains(messageId);
-                if (MessageTracker.enabled) {
-                    MessageTracker.getInstance().track(msg, new String[]{myConnection.toString(), toString()}, "isInProgress = " + inProgress);
-                }
-            }
             if (inProgress) {
                 try {
                     Thread.sleep(CC_SS_DELAY);
@@ -185,15 +164,9 @@ public abstract class ConnectionConsumerImpl
 
     public void processRequest(AsyncMessageDeliveryRequest request, boolean hasNext) {
         if (resetInProgress || deliveryQueue.isCurrentCallInvalid()) {
-            if (MessageTracker.enabled) {
-                MessageTracker.getInstance().track(((AsyncMessageDeliveryRequest) request).getMessageEntry().getMessage(), new String[]{myConnection.toString(), toString()}, "processRequest, resetInProgress || currentCallInvalid, return");
-            }
             return;
         }
         if (request.getConnectionId() != myConnection.getConnectionId()) {
-            if (MessageTracker.enabled) {
-                MessageTracker.getInstance().track(((AsyncMessageDeliveryRequest) request).getMessageEntry().getMessage(), new String[]{myConnection.toString(), toString()}, "processRequest, invalid connectionId (" + request.getConnectionId() + " vs " + myConnection.getConnectionId() + ")");
-            }
             return;
         }
         try {
@@ -208,21 +181,12 @@ public abstract class ConnectionConsumerImpl
                     currentSession.createShadowConsumer(getQueueName());
                 currentSession.setConnectionConsumer(this);
                 if (resetInProgress || deliveryQueue.isCurrentCallInvalid()) {
-                    if (MessageTracker.enabled) {
-                        MessageTracker.getInstance().track(((AsyncMessageDeliveryRequest) request).getMessageEntry().getMessage(), new String[]{myConnection.toString(), toString()}, "processRequest, resetInProgress || currentCallInvalid, return (2)");
-                    }
                     return;
                 }
-            }
-            if (MessageTracker.enabled) {
-                MessageTracker.getInstance().track(((AsyncMessageDeliveryRequest) request).getMessageEntry().getMessage(), new String[]{myConnection.toString(), toString()}, "processRequest, " + request.getConnectionId() + " / " + myConnection.getConnectionId());
             }
             MessageEntry me = request.getMessageEntry();
             checkInProgress(me.getMessage(), me.getMessage().getJMSMessageID());
             if (resetInProgress || deliveryQueue.isCurrentCallInvalid()) {
-                if (MessageTracker.enabled) {
-                    MessageTracker.getInstance().track(((AsyncMessageDeliveryRequest) request).getMessageEntry().getMessage(), new String[]{myConnection.toString(), toString()}, "processRequest, resetInProgress || currentCallInvalid, return (3)");
-                }
                 return;
             }
             me.setConnectionId(request.getConnectionId());

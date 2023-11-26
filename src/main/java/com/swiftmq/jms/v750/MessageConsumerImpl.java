@@ -27,49 +27,51 @@ import com.swiftmq.tools.collection.RingBuffer;
 import com.swiftmq.tools.collection.RingBufferThreadsafe;
 import com.swiftmq.tools.concurrent.Semaphore;
 import com.swiftmq.tools.requestreply.*;
-import com.swiftmq.tools.tracking.MessageTracker;
 import com.swiftmq.tools.util.IdGenerator;
 import com.swiftmq.tools.util.UninterruptableWaiter;
 
 import javax.jms.IllegalStateException;
 import javax.jms.*;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class MessageConsumerImpl implements MessageConsumer, SwiftMQMessageConsumer, Recreatable, RequestRetryValidator {
-    String uniqueConsumerId = IdGenerator.getInstance().nextId('/');
-    boolean closed = false;
-    volatile int consumerId = 0;
-    boolean transacted = false;
-    int acknowledgeMode = 0;
+    final String uniqueConsumerId = IdGenerator.getInstance().nextId('/');
+    final AtomicBoolean closed = new AtomicBoolean(false);
+    final AtomicInteger consumerId = new AtomicInteger();
+    final AtomicBoolean transacted = new AtomicBoolean(false);
+    final AtomicInteger acknowledgeMode = new AtomicInteger();
     RequestRegistry requestRegistry = null;
     String messageSelector = null;
     MessageListener messageListener = null;
     SessionImpl mySession = null;
     int serverQueueConsumerId = -1;
     boolean useThreadContextCL = false;
-    boolean cancelled = false;
+    final AtomicBoolean cancelled = new AtomicBoolean(false);
     RingBuffer messageCache = null;
-    boolean doAck = false;
-    boolean reportDelivered = false;
-    boolean recordLog = true;
-    boolean receiverWaiting = false;
-    boolean wasRecovered = false;
-    volatile boolean fillCachePending = false;
-    boolean receiveNoWaitFirstCall = true;
-    boolean consumerStarted = false;
-    Lock fillCacheLock = new ReentrantLock();
+    final AtomicBoolean doAck = new AtomicBoolean(false);
+    final AtomicBoolean reportDelivered = new AtomicBoolean(false);
+    final AtomicBoolean recordLog = new AtomicBoolean(true);
+    final AtomicBoolean receiverWaiting = new AtomicBoolean(false);
+    final AtomicBoolean wasRecovered = new AtomicBoolean(false);
+    final AtomicBoolean fillCachePending = new AtomicBoolean(false);
+    final AtomicBoolean receiveNoWaitFirstCall = new AtomicBoolean(true);
+    final AtomicBoolean consumerStarted = new AtomicBoolean(false);
+    final Lock lock = new ReentrantLock();
+    final UninterruptableWaiter waiter = new UninterruptableWaiter(lock);
 
     public MessageConsumerImpl(boolean transacted, int acknowledgeMode, RequestRegistry requestRegistry,
                                String messageSelector, SessionImpl session) {
-        this.transacted = transacted;
-        this.acknowledgeMode = acknowledgeMode;
+        this.transacted.set(transacted);
+        this.acknowledgeMode.set(acknowledgeMode);
         this.requestRegistry = requestRegistry;
         this.messageSelector = messageSelector;
         this.mySession = session;
         useThreadContextCL = mySession.getMyConnection().isUseThreadContextCL();
-        reportDelivered = transacted || acknowledgeMode == Session.CLIENT_ACKNOWLEDGE;
+        reportDelivered.set(transacted || acknowledgeMode == Session.CLIENT_ACKNOWLEDGE);
         messageCache = new RingBufferThreadsafe(mySession.getMyConnection().getSmqpConsumerCacheSize());
     }
 
@@ -97,7 +99,7 @@ public class MessageConsumerImpl implements MessageConsumer, SwiftMQMessageConsu
     }
 
     protected void verifyState() throws JMSException {
-        if (closed) {
+        if (closed.get()) {
             throw new javax.jms.IllegalStateException("Message consumer is closed");
         }
 
@@ -105,36 +107,26 @@ public class MessageConsumerImpl implements MessageConsumer, SwiftMQMessageConsu
     }
 
     public boolean isConsumerStarted() {
-        return consumerStarted;
+        return consumerStarted.get();
     }
 
     void setWasRecovered(boolean wasRecovered) {
-        this.wasRecovered = wasRecovered;
+        this.wasRecovered.set(wasRecovered);
     }
 
     void setDoAck(boolean doAck) {
-        this.doAck = doAck;
+        this.doAck.set(doAck);
     }
 
     public void setRecordLog(boolean recordLog) {
-        this.recordLog = recordLog;
+        this.recordLog.set(recordLog);
     }
 
     void addToCache(AsyncMessageDeliveryRequest request) {
         if (isClosed())
             return;
         if (request.isRequiresRestart())
-            fillCachePending = false;
-        MessageImpl msg = request.getMessageEntry().getMessage();
-        if (request.getConnectionId() != mySession.myConnection.getConnectionId()) {
-            if (MessageTracker.enabled) {
-                MessageTracker.getInstance().track(((AsyncMessageDeliveryRequest) request).getMessageEntry().getMessage(), new String[]{mySession.myConnection.toString(), mySession.toString(), toString()}, "addToCache, invalid connectionId (" + request.getConnectionId() + " vs " + mySession.myConnection.getConnectionId() + ")");
-            }
-            return;
-        }
-        if (MessageTracker.enabled) {
-            MessageTracker.getInstance().track(msg, new String[]{mySession.myConnection.toString(), mySession.toString(), toString()}, "addToCache");
-        }
+            fillCachePending.set(false);
         messageCache.add(request);
     }
 
@@ -146,31 +138,40 @@ public class MessageConsumerImpl implements MessageConsumer, SwiftMQMessageConsu
         }
     }
 
-    synchronized boolean invokeConsumer() {
-        if (messageCache.getSize() > 0) {
-            if (messageListener == null) {
-                if (receiverWaiting) {
-                    receiverWaiting = false;
-                    notify();
+    boolean invokeConsumer() {
+        boolean shouldSignal = false;
+
+        // Locking block to safely update receiverWaiting
+        lock.lock();
+        try {
+            if (messageCache.getSize() > 0) {
+                if (messageListener == null) {
+                    if (receiverWaiting.get()) {
+                        receiverWaiting.set(false);
+                        shouldSignal = true; // Set flag to signal after releasing the lock
+                    }
+                } else {
+                    invokeMessageListener();
                 }
-            } else
-                invokeMessageListener();
+            }
+        } finally {
+            lock.unlock();
         }
-        return messageCache.getSize() > 0 && (messageListener != null || receiverWaiting) && !isClosed();
+
+        // Signal outside of the lock
+        if (shouldSignal) {
+            waiter.signal();
+        }
+        return messageCache.getSize() > 0 && (messageListener != null || receiverWaiting.get()) && !isClosed();
     }
 
     void fillCache(boolean force) {
-        fillCacheLock.lock();
-        try {
-            if (isClosed() || fillCachePending && !force)
-                return;
-            fillCachePending = true;
-            consumerStarted = true;
-            requestRegistry.request(new StartConsumerRequest(this, mySession.dispatchId, serverQueueConsumerId,
-                    mySession.getMyDispatchId(), consumerId, mySession.getMyConnection().getSmqpConsumerCacheSize(), mySession.getMyConnection().getSmqpConsumerCacheSizeKB()));
-        } finally {
-            fillCacheLock.unlock();
-        }
+        if (isClosed() || fillCachePending.get() && !force)
+            return;
+        fillCachePending.set(true);
+        consumerStarted.set(true);
+        requestRegistry.request(new StartConsumerRequest(this, mySession.dispatchId, serverQueueConsumerId,
+                mySession.getMyDispatchId(), consumerId.get(), mySession.getMyConnection().getSmqpConsumerCacheSize(), mySession.getMyConnection().getSmqpConsumerCacheSizeKB()));
     }
 
     void fillCache() {
@@ -178,20 +179,20 @@ public class MessageConsumerImpl implements MessageConsumer, SwiftMQMessageConsu
     }
 
     void clearCache() {
-        fillCachePending = false;
+        fillCachePending.set(false);
         messageCache.clear();
     }
 
     public boolean isClosed() {
-        return closed || mySession.isClosed();
+        return closed.get() || mySession.isClosed();
     }
 
     int getConsumerId() {
-        return consumerId;
+        return consumerId.get();
     }
 
     void setConsumerId(int id) {
-        consumerId = id;
+        consumerId.set(id);
     }
 
     int getServerQueueConsumerId() {
@@ -204,20 +205,17 @@ public class MessageConsumerImpl implements MessageConsumer, SwiftMQMessageConsu
 
     public String getMessageSelector() throws JMSException {
         verifyState();
-
         return messageSelector;
     }
 
-    public synchronized MessageListener getMessageListener() throws JMSException {
+    public MessageListener getMessageListener() throws JMSException {
         verifyState();
-
         return (messageListener);
     }
 
-    public synchronized void setMessageListener(MessageListener listener) throws JMSException {
+    public void setMessageListener(MessageListener listener) throws JMSException {
         verifyState();
-
-        if (listener != null && !consumerStarted)
+        if (listener != null && !consumerStarted.get())
             fillCache();
         messageListener = listener;
         if (listener != null)
@@ -225,93 +223,73 @@ public class MessageConsumerImpl implements MessageConsumer, SwiftMQMessageConsu
     }
 
     private void invokeMessageListener() {
-        if (isClosed())
-            return;
-        AsyncMessageDeliveryRequest request = (AsyncMessageDeliveryRequest) messageCache.remove();
-        if (request.getConnectionId() != mySession.myConnection.getConnectionId()) {
-            if (MessageTracker.enabled) {
-                MessageTracker.getInstance().track(request.getMessageEntry().getMessage(), new String[]{mySession.myConnection.toString(), mySession.toString(), toString()}, "invokeMessageListener, invalid connectionId (" + request.getConnectionId() + " vs " + mySession.myConnection.getConnectionId() + ")");
-            }
-            return;
-        }
-        MessageEntry messageEntry = request.getMessageEntry();
-        MessageImpl msg = messageEntry.getMessage();
-        messageEntry.moveMessageAttributes();
-        MessageIndex msgIndex = msg.getMessageIndex();
-        msg.setMessageConsumerImpl(this);
+        lock.lock();
         try {
-            msg.reset();
-        } catch (JMSException e) {
-            e.printStackTrace();
-        }
-        msg.setReadOnly(true);
-        msg.setUseThreadContextCL(useThreadContextCL);
-        String id = null;
-        boolean duplicate = false;
-        if (recordLog) {
-            id = SessionImpl.buildId(uniqueConsumerId, msg);
-            duplicate = mySession.myConnection.isDuplicateMessageDetection() && mySession.isDuplicate(id);
-        }
-        if (MessageTracker.enabled) {
-            MessageTracker.getInstance().track(msg, new String[]{mySession.myConnection.toString(), mySession.toString(), toString()}, "invokeMessageListener, duplicate=" + duplicate);
-        }
-        if (reportDelivered)
-            reportDelivered(msg, false);
-        try {
-            if (!duplicate) {
-                if (recordLog && mySession.myConnection.isDuplicateMessageDetection())
-                    mySession.addCurrentTxLog(id);
-                if (MessageTracker.enabled) {
-                    MessageTracker.getInstance().track(msg, new String[]{mySession.myConnection.toString(), mySession.toString(), toString()}, "invokeMessageListener, onMessage...");
-                }
-                mySession.withinOnMessage = true;
-                mySession.onMessageMessage = msg;
-                mySession.onMessageConsumer = this;
-                mySession.setTxCancelled(false);
-                messageListener.onMessage(msg);
-                mySession.onMessageMessage = null;
-                mySession.onMessageConsumer = null;
-                mySession.withinOnMessage = false;
-                if (MessageTracker.enabled) {
-                    MessageTracker.getInstance().track(msg, new String[]{mySession.myConnection.toString(), mySession.toString(), toString()}, "invokeMessageListener, onMessage ok");
-                }
-                if (mySession.isTxCancelled() || mySession.acknowledgeMode == Session.CLIENT_ACKNOWLEDGE && msg.isCancelled()) {
-                    if (MessageTracker.enabled) {
-                        MessageTracker.getInstance().track(msg, new String[]{mySession.myConnection.toString(), mySession.toString(), toString()}, "tx was cancelled, return!");
-                    }
-                    wasRecovered = false;
-                    return;
-                }
-            }
-        } catch (RuntimeException e) {
-            if (MessageTracker.enabled) {
-                MessageTracker.getInstance().track(msg, new String[]{mySession.myConnection.toString(), mySession.toString(), toString()}, "invokeMessageListener, exception=" + e);
-            }
-            System.err.println("ERROR! MessageListener throws RuntimeException, shutting down consumer!");
-            e.printStackTrace();
+            if (isClosed())
+                return;
+            AsyncMessageDeliveryRequest request = (AsyncMessageDeliveryRequest) messageCache.remove();
+            MessageEntry messageEntry = request.getMessageEntry();
+            MessageImpl msg = messageEntry.getMessage();
+            messageEntry.moveMessageAttributes();
+            MessageIndex msgIndex = msg.getMessageIndex();
+            msg.setMessageConsumerImpl(this);
             try {
-                close(e.toString());
-            } catch (JMSException e1) {
+                msg.reset();
+            } catch (JMSException e) {
+                e.printStackTrace();
             }
-            return;
-        }
-        if (!wasRecovered) {
-            if (request.isRequiresRestart())
-                fillCache();
-            if (doAck) {
-                try {
-                    if (MessageTracker.enabled) {
-                        MessageTracker.getInstance().track(msg, new String[]{mySession.myConnection.toString(), mySession.toString(), toString()}, "invokeMessageListener, ack");
+            msg.setReadOnly(true);
+            msg.setUseThreadContextCL(useThreadContextCL);
+            String id = null;
+            boolean duplicate = false;
+            if (recordLog.get()) {
+                id = SessionImpl.buildId(uniqueConsumerId, msg);
+                duplicate = mySession.myConnection.isDuplicateMessageDetection() && mySession.isDuplicate(id);
+            }
+            if (reportDelivered.get())
+                reportDelivered(msg, false);
+            try {
+                if (!duplicate) {
+                    if (recordLog.get() && mySession.myConnection.isDuplicateMessageDetection())
+                        mySession.addCurrentTxLog(id);
+                    mySession.withinOnMessage = true;
+                    mySession.onMessageMessage = msg;
+                    mySession.onMessageConsumer = this;
+                    mySession.setTxCancelled(false);
+                    messageListener.onMessage(msg);
+                    mySession.onMessageMessage = null;
+                    mySession.onMessageConsumer = null;
+                    mySession.withinOnMessage = false;
+                    if (mySession.isTxCancelled() || mySession.acknowledgeMode == Session.CLIENT_ACKNOWLEDGE && msg.isCancelled()) {
+                        wasRecovered.set(false);
+                        return;
                     }
-                    boolean cancelled = acknowledgeMessage(msgIndex, false);
-                    if (MessageTracker.enabled) {
-                        MessageTracker.getInstance().track(msg, new String[]{mySession.myConnection.toString(), mySession.toString(), toString()}, "invokeMessageListener, ack, cancelled=" + cancelled);
-                    }
-                } catch (JMSException e) {
                 }
+            } catch (RuntimeException e) {
+                System.err.println("ERROR! MessageListener throws RuntimeException, shutting down consumer!");
+                e.printStackTrace();
+                try {
+                    close(e.toString());
+                } catch (JMSException e1) {
+                }
+                return;
             }
-        } else
-            wasRecovered = false;
+            if (!wasRecovered.get()) {
+                if (request.isRequiresRestart())
+                    fillCache();
+                if (doAck.get()) {
+                    try {
+                        acknowledgeMessage(msgIndex, false);
+                    } catch (JMSException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            } else
+                wasRecovered.set(false);
+        } finally {
+            lock.unlock();
+        }
+
     }
 
     protected void reportDelivered(Message message, boolean duplicate) {
@@ -323,9 +301,9 @@ public class MessageConsumerImpl implements MessageConsumer, SwiftMQMessageConsu
     }
 
     public boolean acknowledgeMessage(MessageImpl message) throws JMSException {
-        if (transacted)
+        if (transacted.get())
             throw new IllegalStateException("acknowledge not possible, session is transacted!");
-        if (!(acknowledgeMode == Session.CLIENT_ACKNOWLEDGE))
+        if (!(acknowledgeMode.get() == Session.CLIENT_ACKNOWLEDGE))
             throw new IllegalStateException("acknowledge not possible, session was not created in mode CLIENT_ACKNOWLEDGE!");
         return acknowledgeMessage(message.getMessageIndex(), true);
     }
@@ -361,97 +339,91 @@ public class MessageConsumerImpl implements MessageConsumer, SwiftMQMessageConsu
         return cancelled;
     }
 
-    synchronized Message receiveMessage(boolean block, long timeout) throws JMSException {
-        verifyState();
+    Message receiveMessage(boolean block, long timeout) throws JMSException {
+        lock.lock();
+        try {
+            verifyState();
 
-        if (messageListener != null) {
-            throw new JMSException("receive not allowed while a message listener has been set");
-        }
-        boolean wasDuplicate = false;
-        boolean wasInvalidConnectionId = false;
-        MessageImpl msg = null;
-        String id = null;
-        do {
-            wasDuplicate = false;
-            wasInvalidConnectionId = false;
-            if (!consumerStarted)
-                fillCache();
-            do {
-                if (messageCache.getSize() == 0) {
-                    if (block) {
-                        receiverWaiting = true;
-                        if (timeout == 0) {
-                            UninterruptableWaiter.doWait(this);
-                        } else {
-                            long to = timeout;
-                            do {
-                                long startWait = System.currentTimeMillis();
-                                UninterruptableWaiter.doWait(this, to);
-                                long delta = System.currentTimeMillis() - startWait;
-                                to -= delta;
-                            }
-                            while (to > 0 && messageCache.getSize() == 0 && fillCachePending && !cancelled && !isClosed());
-                        }
-                    } else {
-                        if (fillCachePending && receiveNoWaitFirstCall) {
-                            receiverWaiting = true;
-                            UninterruptableWaiter.doWait(this, 1000);
-                        }
-                    }
-                    if (cancelled)
-                        return null;
-                }
-            } while (mySession.resetInProgress);
-            receiverWaiting = false;
-            if (messageCache.getSize() == 0 || isClosed())
-                return null;
-
-            AsyncMessageDeliveryRequest request = (AsyncMessageDeliveryRequest) messageCache.remove();
-            if (request.getConnectionId() != mySession.myConnection.getConnectionId()) {
-                if (MessageTracker.enabled) {
-                    MessageTracker.getInstance().track(request.getMessageEntry().getMessage(), new String[]{mySession.myConnection.toString(), mySession.toString(), toString()}, "receiveMessage, invalid connectionId (" + request.getConnectionId() + " vs " + mySession.myConnection.getConnectionId() + ")");
-                }
-                wasInvalidConnectionId = true;
-            } else {
-                MessageEntry messageEntry = request.getMessageEntry();
-                msg = messageEntry.getMessage();
-                messageEntry.moveMessageAttributes();
-                msg.setMessageConsumerImpl(this);
-                msg.reset();
-                msg.setReadOnly(true);
-                msg.setUseThreadContextCL(useThreadContextCL);
-                if (request.isRequiresRestart())
-                    fillCache();
-                if (recordLog) {
-                    id = SessionImpl.buildId(uniqueConsumerId, msg);
-                    wasDuplicate = mySession.myConnection.isDuplicateMessageDetection() && mySession.isDuplicate(id);
-                }
-                if (MessageTracker.enabled) {
-                    MessageTracker.getInstance().track(msg, new String[]{mySession.myConnection.toString(), mySession.toString(), toString()}, "receivedMessage, duplicate=" + wasDuplicate);
-                }
-                if (reportDelivered)
-                    reportDelivered(msg, false);
-                if (doAck) {
-                    try {
-                        if (MessageTracker.enabled) {
-                            MessageTracker.getInstance().track(msg, new String[]{mySession.myConnection.toString(), mySession.toString(), toString()}, "receivedMessage, ack...");
-                        }
-                        boolean cancelled = acknowledgeMessage(msg.getMessageIndex(), false);
-                        if (MessageTracker.enabled) {
-                            MessageTracker.getInstance().track(msg, new String[]{mySession.myConnection.toString(), mySession.toString(), toString()}, "receivedMessage, ack, cancelled=" + cancelled);
-                        }
-                    } catch (JMSException e) {
-                    }
-                }
-                if (wasDuplicate) {
-                    msg = null;
-                }
+            if (messageListener != null) {
+                throw new JMSException("receive not allowed while a message listener has been set");
             }
-        } while (wasDuplicate || wasInvalidConnectionId);
+            boolean wasDuplicate = false;
+            boolean wasInvalidConnectionId = false;
+            MessageImpl msg = null;
+            String id = null;
+            do {
+                wasDuplicate = false;
+                wasInvalidConnectionId = false;
+                if (!consumerStarted.get())
+                    fillCache();
+                do {
+                    if (messageCache.getSize() == 0) {
+                        if (block) {
+                            receiverWaiting.set(true);
+                            if (timeout == 0) {
+                                waiter.doWait();
+                            } else {
+                                long to = timeout;
+                                do {
+                                    long startWait = System.currentTimeMillis();
+                                    waiter.doWait(to);
+                                    long delta = System.currentTimeMillis() - startWait;
+                                    to -= delta;
+                                }
+                                while (to > 0 && messageCache.getSize() == 0 && fillCachePending.get() && !cancelled.get() && !isClosed());
+                            }
+                        } else {
+                            if (fillCachePending.get() && receiveNoWaitFirstCall.get()) {
+                                receiverWaiting.set(true);
+                                waiter.doWait(1000);
+                            }
+                        }
+                        if (cancelled.get())
+                            return null;
+                    }
+                } while (mySession.resetInProgress);
+                receiverWaiting.set(false);
+                if (messageCache.getSize() == 0 || isClosed())
+                    return null;
 
-        if (recordLog && mySession.myConnection.isDuplicateMessageDetection())
-            mySession.addCurrentTxLog(id);
-        return msg;
+                AsyncMessageDeliveryRequest request = (AsyncMessageDeliveryRequest) messageCache.remove();
+                if (request.getConnectionId() != mySession.myConnection.getConnectionId()) {
+                    wasInvalidConnectionId = true;
+                } else {
+                    MessageEntry messageEntry = request.getMessageEntry();
+                    msg = messageEntry.getMessage();
+                    messageEntry.moveMessageAttributes();
+                    msg.setMessageConsumerImpl(this);
+                    msg.reset();
+                    msg.setReadOnly(true);
+                    msg.setUseThreadContextCL(useThreadContextCL);
+                    if (request.isRequiresRestart())
+                        fillCache();
+                    if (recordLog.get()) {
+                        id = SessionImpl.buildId(uniqueConsumerId, msg);
+                        wasDuplicate = mySession.myConnection.isDuplicateMessageDetection() && mySession.isDuplicate(id);
+                    }
+                    if (reportDelivered.get())
+                        reportDelivered(msg, false);
+                    if (doAck.get()) {
+                        try {
+                            acknowledgeMessage(msg.getMessageIndex(), false);
+                        } catch (JMSException ignored) {
+                        }
+                    }
+                    if (wasDuplicate) {
+                        msg = null;
+                    }
+                }
+            } while (wasDuplicate || wasInvalidConnectionId);
+
+            if (recordLog.get() && mySession.myConnection.isDuplicateMessageDetection())
+                mySession.addCurrentTxLog(id);
+            return msg;
+        } finally {
+            lock.unlock();
+        }
+
     }
 
     public Message receive() throws JMSException {
@@ -464,18 +436,22 @@ public class MessageConsumerImpl implements MessageConsumer, SwiftMQMessageConsu
 
     public Message receiveNoWait() throws JMSException {
         Message msg = receiveMessage(false, 0);
-        receiveNoWaitFirstCall = false;
+        receiveNoWaitFirstCall.set(false);
         return msg;
     }
 
     void close(String exception) throws JMSException {
-        synchronized (this) {
+        lock.lock();
+        try {
             if (isClosed())
                 return;
-            closed = true;
+            closed.set(true);
             messageCache.clear();
-            notify();
+        } finally {
+            lock.unlock();
         }
+
+        waiter.signal();
 
         Reply reply = null;
 
@@ -493,25 +469,29 @@ public class MessageConsumerImpl implements MessageConsumer, SwiftMQMessageConsu
     }
 
     public void close() throws JMSException {
-        if (closed)
+        if (closed.get())
             return;
         if (!mySession.isSessionStarted()) {
             close(null);
             return;
         }
-        CloseConsumer request = new CloseConsumer(consumerId);
+        CloseConsumer request = new CloseConsumer(consumerId.get());
         request._sem = new Semaphore();
         mySession.serviceRequest(request);
         request._sem.waitHere();
     }
 
     void cancel() {
-        synchronized (this) {
-            cancelled = true;
-            closed = true;
+        lock.lock();
+        try {
+            cancelled.set(true);
+            closed.set(true);
             messageCache.clear();
-            notify();
+        } finally {
+            lock.unlock();
         }
+
+        waiter.signal();
     }
 
 }

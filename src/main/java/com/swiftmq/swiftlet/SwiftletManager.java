@@ -43,11 +43,15 @@ import java.io.FileInputStream;
 import java.io.PrintStream;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.security.Security;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.Lock;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * The SwiftletManager is the single instance of a SwiftMQ router that is
@@ -93,18 +97,18 @@ public class SwiftletManager {
     static final long PROP_CONFIG_WATCHDOG_INTERVAL = Long.parseLong(System.getProperty("swiftmq.config.watchdog.interval", "0"));
     protected static SwiftletManager _instance = null;
     static SimpleDateFormat fmt = new SimpleDateFormat(".yyyyMMddHHmmssSSS");
-    String configFilename = null;
-    Document routerConfig = null;
-    String routerName = null;
-    String workingDirectory = System.getProperty("user.dir");
+    final AtomicReference<String> configFilename = new AtomicReference<>();
+    final AtomicReference<Document> routerConfig = new AtomicReference<>();
+    final AtomicReference<String> routerName = new AtomicReference<>();
+    final AtomicReference<String> workingDirectory = new AtomicReference<>(System.getProperty("user.dir"));
     String[] kernelSwiftletNames = null;
-    Map swiftletTable = null;
+    Map<String, Swiftlet> swiftletTable = null;
     DeployPath dp = null;
-    Map bundleTable = null;
-    Map listeners = new HashMap();
-    Set allListeners = new HashSet();
-    Set kernelListeners = new HashSet();
-    Map surviveMap = Collections.synchronizedMap(new HashMap());
+    Map<String, Bundle> bundleTable = null;
+    Map<String, HashSet<SwiftletManagerListener>> listeners = new ConcurrentHashMap<>();
+    Set allListeners = ConcurrentHashMap.newKeySet();
+    Set<KernelStartupListener> kernelListeners = new HashSet<>();
+    Map<String, Object> surviveMap = new ConcurrentHashMap<String, Object>();
     RouterMemoryMeter memoryMeter = null;
     SwiftletDeployer swiftletDeployer = null;
 
@@ -115,22 +119,21 @@ public class SwiftletManager {
     ConfigfileWatchdog configfileWatchdog = null;
 
     TraceSpace traceSpace = null;
-    Object sSemaphore = new Object();
-    Object lSemaphore = new Object();
-    long memCollectInterval = 10000;
-    boolean smartTree = true;
-    boolean startup = false;
-    volatile boolean rebooting = false;
-    boolean workingDirAdded = false;
-    boolean registerShutdownHook = Boolean.valueOf(System.getProperty(PROP_SHUTDOWN_HOOK, "true"));
-    boolean quietMode = false;
-    boolean strippedMode = false;
-    boolean doFireKernelStartedEvent = true;
-    AtomicBoolean configDirty = new AtomicBoolean(false);
-    Lock saveLock = new ReentrantLock();
+    final AtomicLong memCollectInterval = new AtomicLong(10000);
+    final AtomicBoolean smartTree = new AtomicBoolean(true);
+    final AtomicBoolean startup = new AtomicBoolean(false);
+    final AtomicBoolean rebooting = new AtomicBoolean(false);
+    final AtomicBoolean workingDirAdded = new AtomicBoolean(false);
+    final AtomicBoolean registerShutdownHook = new AtomicBoolean(Boolean.parseBoolean(System.getProperty(PROP_SHUTDOWN_HOOK, "true")));
+    final AtomicBoolean quietMode = new AtomicBoolean(false);
+    final AtomicBoolean strippedMode = new AtomicBoolean(false);
+    final AtomicBoolean doFireKernelStartedEvent = new AtomicBoolean(true);
+    final AtomicBoolean configDirty = new AtomicBoolean(false);
     PrintStream savedSystemOut = System.out;
-
     Thread shutdownHook = null;
+
+    private static final ReentrantLock singletonLock = new ReentrantLock();
+    private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
     protected SwiftletManager() {
     }
@@ -140,10 +143,15 @@ public class SwiftletManager {
      *
      * @return singleton instance
      */
-    public static synchronized SwiftletManager getInstance() {
-        if (_instance == null)
-            _instance = new SwiftletManager();
-        return _instance;
+    public static SwiftletManager getInstance() {
+        singletonLock.lock();
+        try {
+            if (_instance == null)
+                _instance = new SwiftletManager();
+            return _instance;
+        } finally {
+            singletonLock.unlock();
+        }
     }
 
     public boolean isHA() {
@@ -151,11 +159,11 @@ public class SwiftletManager {
     }
 
     public void setDoFireKernelStartedEvent(boolean doFireKernelStartedEvent) {
-        this.doFireKernelStartedEvent = doFireKernelStartedEvent;
+        this.doFireKernelStartedEvent.set(doFireKernelStartedEvent);
     }
 
     protected void trace(String message) {
-        if (!quietMode && traceSpace != null && traceSpace.enabled)
+        if (!quietMode.get() && traceSpace != null && traceSpace.enabled)
             traceSpace.trace("SwiftletManager", message);
     }
 
@@ -280,7 +288,7 @@ public class SwiftletManager {
         trace("Kernel swiftlets started");
     }
 
-    protected void startKernelSwiftlet(String actSwiftletName, Map table) throws Exception {
+    protected void startKernelSwiftlet(String actSwiftletName, Map<String, Swiftlet> table) throws Exception {
         Swiftlet swiftlet;
         long startupTime;
         trace("Starting kernel swiftlet: '" + actSwiftletName + "' ...");
@@ -307,28 +315,32 @@ public class SwiftletManager {
     }
 
     protected void stopKernelSwiftlets() {
-        trace("stopKernelSwiftlets");
-        logSwiftlet.logInformation("SwiftletManager", "stopKernelSwiftlets");
-        stopSwiftletDeployer();
-        List al = new ArrayList();
-        synchronized (sSemaphore) {
+        lock.writeLock().lock();
+        try {
+            trace("stopKernelSwiftlets");
+            logSwiftlet.logInformation("SwiftletManager", "stopKernelSwiftlets");
+            stopSwiftletDeployer();
+            List<Swiftlet> al = new ArrayList<Swiftlet>();
             for (int i = kernelSwiftletNames.length - 1; i >= 0; i--) {
                 String name = kernelSwiftletNames[i];
-                Swiftlet swiftlet = (Swiftlet) swiftletTable.get(name);
+                Swiftlet swiftlet = swiftletTable.get(name);
                 if (swiftlet.getState() == Swiftlet.STATE_ACTIVE) {
                     al.add(swiftlet);
                 }
+                al.add(swiftletTable.get("sys$trace"));
             }
-            al.add(swiftletTable.get("sys$trace"));
-        }
-        for (Object anAl : al) {
-            Swiftlet swiftlet = (Swiftlet) anAl;
-            try {
-                shutdownSwiftlet(swiftlet);
-            } catch (SwiftletException ignored) {
+            for (Swiftlet anAl : al) {
+                Swiftlet swiftlet = anAl;
+                try {
+                    shutdownSwiftlet(swiftlet);
+                } catch (SwiftletException ignored) {
+                }
+                swiftlet.setStartupTime(-1);
             }
-            swiftlet.setStartupTime(-1);
+        } finally {
+            lock.writeLock().unlock();
         }
+
     }
 
     private void fillSwiftletTable() {
@@ -336,19 +348,19 @@ public class SwiftletManager {
     }
 
     public String getWorkingDirectory() {
-        return workingDirectory;
+        return workingDirectory.get();
     }
 
     public void setWorkingDirectory(String workingDirectory) {
-        this.workingDirectory = workingDirectory;
+        this.workingDirectory.set(workingDirectory);
     }
 
     public boolean isRegisterShutdownHook() {
-        return registerShutdownHook;
+        return registerShutdownHook.get();
     }
 
     public void setRegisterShutdownHook(boolean registerShutdownHook) {
-        this.registerShutdownHook = registerShutdownHook;
+        this.registerShutdownHook.set(registerShutdownHook);
     }
 
     public void disableShutdownHook() {
@@ -359,11 +371,11 @@ public class SwiftletManager {
     }
 
     public boolean isQuietMode() {
-        return quietMode;
+        return quietMode.get();
     }
 
     public void setQuietMode(boolean quietMode) {
-        this.quietMode = quietMode;
+        this.quietMode.set(quietMode);
         if (quietMode)
             System.setOut(new NullPrintStream());
         else
@@ -371,11 +383,11 @@ public class SwiftletManager {
     }
 
     public boolean isStrippedMode() {
-        return strippedMode;
+        return strippedMode.get();
     }
 
     public void setStrippedMode(boolean strippedMode) {
-        this.strippedMode = strippedMode;
+        this.strippedMode.set(strippedMode);
     }
 
     public void setConfigDirty(boolean configDirty) {
@@ -399,26 +411,32 @@ public class SwiftletManager {
      * @param bundle deployment bundle.
      * @throws Exception on error during load
      */
-    public synchronized void loadExtensionSwiftlet(Bundle bundle) throws Exception {
-        String name = bundle.getBundleName();
-        trace("loadExtensionSwiftlet: '" + name + "' ...");
-        bundleTable.put(bundle.getBundleName(), bundle);
-        Swiftlet swiftlet = loadSwiftlet(name);
-        swiftlet.setName(name);
-        long startupTime = -1;
+    public void loadExtensionSwiftlet(Bundle bundle) throws Exception {
+        lock.writeLock().lock();
+        try {
+            String name = bundle.getBundleName();
+            trace("loadExtensionSwiftlet: '" + name + "' ...");
+            bundleTable.put(bundle.getBundleName(), bundle);
+            Swiftlet swiftlet = loadSwiftlet(name);
+            swiftlet.setName(name);
+            long startupTime = -1;
 
-        Configuration config = getConfiguration(swiftlet);
-        RouterConfiguration.Singleton().addEntity(config);
-        config.setExtension(true);
+            Configuration config = getConfiguration(swiftlet);
+            RouterConfiguration.Singleton().addEntity(config);
+            config.setExtension(true);
 
-        trace("Swiftlet: '" + name + "', startUpSwiftlet ...");
-        startUpSwiftlet(swiftlet, config);
-        startupTime = System.currentTimeMillis();
-        swiftlet.setStartupTime(startupTime);
-        swiftletTable.put(name, swiftlet);
-        swiftlet = null;
-        saveConfiguration();
-        trace("loadExtensionSwiftlet: '" + name + "' DONE.");
+            trace("Swiftlet: '" + name + "', startUpSwiftlet ...");
+            startUpSwiftlet(swiftlet, config);
+            startupTime = System.currentTimeMillis();
+            swiftlet.setStartupTime(startupTime);
+            swiftletTable.put(name, swiftlet);
+            swiftlet = null;
+            saveConfiguration();
+            trace("loadExtensionSwiftlet: '" + name + "' DONE.");
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     /**
@@ -426,21 +444,27 @@ public class SwiftletManager {
      *
      * @param bundle deployment bundle.
      */
-    public synchronized void unloadExtensionSwiftlet(Bundle bundle) {
-        String name = bundle.getBundleName();
-        trace("unloadExtensionSwiftlet: '" + name + "' ...");
+    public void unloadExtensionSwiftlet(Bundle bundle) {
+        lock.writeLock().lock();
         try {
-            Swiftlet swiftlet = (Swiftlet) swiftletTable.get(name);
-            if (swiftlet != null)
-                shutdownSwiftlet(swiftlet);
-            RouterConfiguration.Singleton().removeEntity(RouterConfiguration.Singleton().getEntity(name));
-        } catch (Exception ignored) {
+            String name = bundle.getBundleName();
+            trace("unloadExtensionSwiftlet: '" + name + "' ...");
+            try {
+                Swiftlet swiftlet = swiftletTable.get(name);
+                if (swiftlet != null)
+                    shutdownSwiftlet(swiftlet);
+                RouterConfiguration.Singleton().removeEntity(RouterConfiguration.Singleton().getEntity(name));
+            } catch (Exception ignored) {
+            }
+            bundleTable.remove(name);
+            swiftletTable.remove(name);
+            System.gc();
+            System.runFinalization();
+            trace("unloadExtensionSwiftlet: '" + name + "' DONE.");
+        } finally {
+            lock.writeLock().unlock();
         }
-        bundleTable.remove(name);
-        swiftletTable.remove(name);
-        System.gc();
-        System.runFinalization();
-        trace("unloadExtensionSwiftlet: '" + name + "' DONE.");
+
     }
 
     /**
@@ -453,7 +477,7 @@ public class SwiftletManager {
      * @return true/false.
      */
     public boolean isUseSmartTree() {
-        return smartTree;
+        return smartTree.get();
     }
 
     /**
@@ -462,7 +486,7 @@ public class SwiftletManager {
      * @return true/false.
      */
     public boolean isStartup() {
-        return startup;
+        return startup.get();
     }
 
     /**
@@ -471,10 +495,10 @@ public class SwiftletManager {
      * @return true/false.
      */
     public boolean isRebooting() {
-        return rebooting;
+        return rebooting.get();
     }
 
-    protected Map createBundleTable(String kernelPath) throws Exception {
+    protected Map<String, Bundle> createBundleTable(String kernelPath) throws Exception {
         if (kernelPath == null)
             throw new Exception("Missing attribute: kernelpath");
         File f = new File(SwiftUtilities.addWorkingDir(kernelPath));
@@ -492,7 +516,7 @@ public class SwiftletManager {
         BundleEvent[] events = dp.getBundleEvents();
         if (events == null)
             throw new Exception("No Kernel Swiftlets found in 'kernelpath'");
-        Map table = new HashMap();
+        Map<String, Bundle> table = new HashMap<String, Bundle>();
         for (BundleEvent event : events) {
             Bundle b = event.getBundle();
             table.put(b.getBundleName(), b);
@@ -504,7 +528,7 @@ public class SwiftletManager {
         String initialConfig = System.getProperty(PROP_INITIAL_CONFIG);
         if (initialConfig != null && initialConfig.trim().length() > 0)
             return XMLUtilities.createDocument(new FileInputStream(initialConfig));
-        return routerConfig;
+        return routerConfig.get();
     }
 
     /**
@@ -518,9 +542,9 @@ public class SwiftletManager {
             StringTokenizer t = new StringTokenizer(preconfig, ",");
             while (t.hasMoreTokens()) {
                 String pc = t.nextToken();
-                XMLUtilities.writeDocument(routerConfig, configFilename + fmt.format(new Date()));
-                routerConfig = new PreConfigurator(routerConfig, XMLUtilities.createDocument(new FileInputStream(pc))).applyChanges();
-                XMLUtilities.writeDocument(routerConfig, configFilename);
+                XMLUtilities.writeDocument(routerConfig.get(), configFilename + fmt.format(new Date()));
+                routerConfig.set(new PreConfigurator(routerConfig.get(), XMLUtilities.createDocument(new FileInputStream(pc))).applyChanges());
+                XMLUtilities.writeDocument(routerConfig.get(), configFilename.get());
                 System.out.println("Applied changes from preconfig file: " + pc);
             }
         }
@@ -534,15 +558,15 @@ public class SwiftletManager {
      * @throws Exception on error.
      */
     public void startRouter(String name) throws Exception {
-        if (!workingDirAdded) {
-            configFilename = SwiftUtilities.addWorkingDir(name);
-            workingDirAdded = true;
+        if (!workingDirAdded.get()) {
+            configFilename.set(SwiftUtilities.addWorkingDir(name));
+            workingDirAdded.set(true);
         }
-        routerConfig = XMLUtilities.createDocument(new FileInputStream(configFilename));
+        routerConfig.set(XMLUtilities.createDocument(new FileInputStream(configFilename.get())));
 
-        UpgradeUtilities.checkRelease(configFilename, routerConfig);
+        UpgradeUtilities.checkRelease(configFilename.get(), routerConfig.get());
         checkAndApplyPreconfig();
-        Element root = routerConfig.getRootElement();
+        Element root = routerConfig.get().getRootElement();
         parseOptionalConfiguration(root);
         String value = root.attributeValue("startorder");
         if (value == null)
@@ -553,12 +577,12 @@ public class SwiftletManager {
         while (t.hasMoreTokens())
             kernelSwiftletNames[i++] = t.nextToken();
         if (root.attributeValue("use-smart-tree") != null)
-            smartTree = Boolean.valueOf(root.attributeValue("use-smart-tree"));
+            smartTree.set(Boolean.parseBoolean(root.attributeValue("use-smart-tree")));
         else
-            smartTree = true;
+            smartTree.set(true);
         if (root.attributeValue("memory-collect-interval") != null)
-            memCollectInterval = Long.valueOf(root.attributeValue("memory-collect-interval"));
-        routerName = root.attributeValue("name");
+            memCollectInterval.set(Long.valueOf(root.attributeValue("memory-collect-interval")));
+        routerName.set(root.attributeValue("name"));
 
         bundleTable = createBundleTable(root.attributeValue("kernelpath"));
 
@@ -567,12 +591,12 @@ public class SwiftletManager {
         timerSwiftlet = (TimerSwiftlet) getSwiftlet("sys$timer");
 
         if (PROP_CONFIG_WATCHDOG_INTERVAL > 0) {
-            configfileWatchdog = new ConfigfileWatchdog(traceSpace, logSwiftlet, configFilename);
+            configfileWatchdog = new ConfigfileWatchdog(traceSpace, logSwiftlet, configFilename.get());
             timerSwiftlet.addTimerListener(PROP_CONFIG_WATCHDOG_INTERVAL, configfileWatchdog);
         }
 
         // shutdown hook
-        if (shutdownHook == null && registerShutdownHook) {
+        if (shutdownHook == null && registerShutdownHook.get()) {
             shutdownHook = new Thread(() -> shutdown());
             Runtime.getRuntime().addShutdownHook(shutdownHook);
         }
@@ -634,115 +658,122 @@ public class SwiftletManager {
         commandRegistry.addCommand(saveCommand);
     }
 
-    private synchronized void initSwiftlets() {
-        System.out.println("Booting SwiftMQ " + Version.getKernelVersion() + " " + "[" + getRouterName() + "] ...");
-        /*${evalprintout}*/
-        startup = true;
-        swiftletTable = (Map) Collections.synchronizedMap(new HashMap());
-
-        createRouterCommands();
-
+    private void initSwiftlets() {
+        lock.writeLock().lock();
         try {
-            Entity envEntity = new Entity(Configuration.ENV_ENTITY,
-                    "Router Environment",
-                    "Environment of this Router",
-                    null);
-            envEntity.createCommands();
-            RouterConfiguration.Singleton().addEntity(envEntity);
+            System.out.println("Booting SwiftMQ " + Version.getKernelVersion() + " " + "[" + getRouterName() + "] ...");
+            /*${evalprintout}*/
+            startup.set(true);
+            swiftletTable = new ConcurrentHashMapWithNulls<>();
 
-            Property prop = new Property("routername");
-            prop.setType(String.class);
-            prop.setDisplayName("Router Name");
-            prop.setDescription("Name of this Router");
-            prop.setValue(getRouterName());
-            prop.setRebootRequired(true);
-            prop.setPropertyChangeListener(new PropertyChangeAdapter(null) {
-                public void propertyChanged(Property property, Object oldValue, Object newValue)
-                        throws PropertyChangeException {
-                    try {
-                        if (newValue != null)
-                            SwiftUtilities.verifyRouterName((String) newValue);
-                    } catch (Exception e) {
-                        throw new PropertyChangeException(e.getMessage());
-                    }
-                }
-            });
-            envEntity.addProperty(prop.getName(), prop);
-            prop = new Property("use-smart-tree");
-            prop.setType(Boolean.class);
-            prop.setDisplayName("Use Smart Management Tree");
-            prop.setDescription("Use Smart Management Tree (reduced Usage Parts)");
-            prop.setValue(smartTree);
-            prop.setRebootRequired(true);
-            envEntity.addProperty(prop.getName(), prop);
-            prop = new Property("release");
-            prop.setType(String.class);
-            prop.setDisplayName("SwiftMQ Release");
-            prop.setDescription("SwiftMQ Release");
-            prop.setValue(Version.getKernelVersion());
-            prop.setReadOnly(true);
-            prop.setStorable(false);
-            envEntity.addProperty(prop.getName(), prop);
-            prop = new Property("hostname");
-            prop.setType(String.class);
-            prop.setDisplayName("Hostname");
-            prop.setDescription("Router's DNS Hostname");
-            String localhost = "unknown";
+            createRouterCommands();
+
             try {
-                localhost = InetAddress.getByName(InetAddress.getLocalHost().getHostAddress()).getHostName();
-            } catch (UnknownHostException e) {
-                System.err.println("Unable to determine local host name: " + e);
+                Entity envEntity = new Entity(Configuration.ENV_ENTITY,
+                        "Router Environment",
+                        "Environment of this Router",
+                        null);
+                envEntity.createCommands();
+                RouterConfiguration.Singleton().addEntity(envEntity);
+
+                Property prop = new Property("routername");
+                prop.setType(String.class);
+                prop.setDisplayName("Router Name");
+                prop.setDescription("Name of this Router");
+                prop.setValue(getRouterName());
+                prop.setRebootRequired(true);
+                prop.setPropertyChangeListener(new PropertyChangeAdapter(null) {
+                    public void propertyChanged(Property property, Object oldValue, Object newValue)
+                            throws PropertyChangeException {
+                        try {
+                            if (newValue != null)
+                                SwiftUtilities.verifyRouterName((String) newValue);
+                        } catch (Exception e) {
+                            throw new PropertyChangeException(e.getMessage());
+                        }
+                    }
+                });
+                envEntity.addProperty(prop.getName(), prop);
+                prop = new Property("use-smart-tree");
+                prop.setType(Boolean.class);
+                prop.setDisplayName("Use Smart Management Tree");
+                prop.setDescription("Use Smart Management Tree (reduced Usage Parts)");
+                prop.setValue(smartTree.get());
+                prop.setRebootRequired(true);
+                envEntity.addProperty(prop.getName(), prop);
+                prop = new Property("release");
+                prop.setType(String.class);
+                prop.setDisplayName("SwiftMQ Release");
+                prop.setDescription("SwiftMQ Release");
+                prop.setValue(Version.getKernelVersion());
+                prop.setReadOnly(true);
+                prop.setStorable(false);
+                envEntity.addProperty(prop.getName(), prop);
+                prop = new Property("hostname");
+                prop.setType(String.class);
+                prop.setDisplayName("Hostname");
+                prop.setDescription("Router's DNS Hostname");
+                String localhost = "unknown";
+                try {
+                    localhost = InetAddress.getByName(InetAddress.getLocalHost().getHostAddress()).getHostName();
+                } catch (UnknownHostException e) {
+                    System.err.println("Unable to determine local host name: " + e);
+                }
+                prop.setValue(localhost);
+                prop.setReadOnly(true);
+                prop.setStorable(false);
+                envEntity.addProperty(prop.getName(), prop);
+                prop = new Property("startuptime");
+                prop.setType(String.class);
+                prop.setDisplayName("Startup Time");
+                prop.setDescription("Router's Startup Time");
+                prop.setValue(new Date().toString());
+                prop.setReadOnly(true);
+                prop.setStorable(false);
+                envEntity.addProperty(prop.getName(), prop);
+                prop = new Property("os");
+                prop.setType(String.class);
+                prop.setDisplayName("Operating System");
+                prop.setDescription("Router's Host OS");
+                prop.setValue(System.getProperty("os.name") + " " + System.getProperty("os.version") + " " + System.getProperty("os.arch") + " ");
+                prop.setReadOnly(true);
+                prop.setStorable(false);
+                envEntity.addProperty(prop.getName(), prop);
+                prop = new Property("jre");
+                prop.setType(String.class);
+                prop.setDisplayName("JRE");
+                prop.setDescription("JRE Version");
+                prop.setValue(System.getProperty("java.version"));
+                prop.setReadOnly(true);
+                prop.setStorable(false);
+                envEntity.addProperty(prop.getName(), prop);
+                prop = new Property("memory-collect-interval");
+                prop.setType(Long.class);
+                prop.setDisplayName("Memory Collect Interval");
+                prop.setDescription("Memory Collect Interval (ms)");
+                prop.setValue(memCollectInterval.get());
+                prop.setReadOnly(false);
+                prop.setStorable(false);
+                envEntity.addProperty(prop.getName(), prop);
+                memoryMeter = new RouterMemoryMeter(prop);
+                envEntity.addEntity(memoryMeter.getMemoryList());
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-            prop.setValue(localhost);
-            prop.setReadOnly(true);
-            prop.setStorable(false);
-            envEntity.addProperty(prop.getName(), prop);
-            prop = new Property("startuptime");
-            prop.setType(String.class);
-            prop.setDisplayName("Startup Time");
-            prop.setDescription("Router's Startup Time");
-            prop.setValue(new Date().toString());
-            prop.setReadOnly(true);
-            prop.setStorable(false);
-            envEntity.addProperty(prop.getName(), prop);
-            prop = new Property("os");
-            prop.setType(String.class);
-            prop.setDisplayName("Operating System");
-            prop.setDescription("Router's Host OS");
-            prop.setValue(System.getProperty("os.name") + " " + System.getProperty("os.version") + " " + System.getProperty("os.arch") + " ");
-            prop.setReadOnly(true);
-            prop.setStorable(false);
-            envEntity.addProperty(prop.getName(), prop);
-            prop = new Property("jre");
-            prop.setType(String.class);
-            prop.setDisplayName("JRE");
-            prop.setDescription("JRE Version");
-            prop.setValue(System.getProperty("java.version"));
-            prop.setReadOnly(true);
-            prop.setStorable(false);
-            envEntity.addProperty(prop.getName(), prop);
-            prop = new Property("memory-collect-interval");
-            prop.setType(Long.class);
-            prop.setDisplayName("Memory Collect Interval");
-            prop.setDescription("Memory Collect Interval (ms)");
-            prop.setValue(memCollectInterval);
-            prop.setReadOnly(false);
-            prop.setStorable(false);
-            envEntity.addProperty(prop.getName(), prop);
-            memoryMeter = new RouterMemoryMeter(prop);
-            envEntity.addEntity(memoryMeter.getMemoryList());
-        } catch (Exception ignored) {
+
+            fillSwiftletTable();
+            startKernelSwiftlets();
+            trace("Init swiftlets successful");
+            memoryMeter.start();
+            startup.set(false);
+            if (doFireKernelStartedEvent.get())
+                fireKernelStartedEvent();
+            logSwiftlet.logInformation("SwiftletManager", "networkaddress.cache.ttl=" + Security.getProperty("networkaddress.cache.ttl"));
+            System.out.println("SwiftMQ " + Version.getKernelVersion() + " " + "[" + getRouterName() + "] is ready.");
+        } finally {
+            lock.writeLock().unlock();
         }
 
-        fillSwiftletTable();
-        startKernelSwiftlets();
-        trace("Init swiftlets successful");
-        memoryMeter.start();
-        startup = false;
-        if (doFireKernelStartedEvent)
-            fireKernelStartedEvent();
-        logSwiftlet.logInformation("SwiftletManager", "networkaddress.cache.ttl=" + java.security.Security.getProperty("networkaddress.cache.ttl"));
-        System.out.println("SwiftMQ " + Version.getKernelVersion() + " " + "[" + getRouterName() + "] is ready.");
     }
 
     /**
@@ -759,9 +790,9 @@ public class SwiftletManager {
      * @param delay A reboot delay in ms
      */
     public void reboot(long delay) {
-        if (rebooting)
+        if (rebooting.get())
             return;
-        rebooting = true;
+        rebooting.set(true);
         try {
             Thread.sleep(delay);
         } catch (Exception ignored) {
@@ -773,16 +804,16 @@ public class SwiftletManager {
         } catch (Exception ignored) {
         }
         try {
-            startRouter(configFilename);
+            startRouter(configFilename.get());
         } catch (Exception e) {
             e.printStackTrace();
             System.exit(-1);
         }
-        rebooting = false;
+        rebooting.set(false);
     }
 
     protected Swiftlet loadSwiftlet(String swiftletName) throws Exception {
-        Bundle bundle = (Bundle) bundleTable.get(swiftletName);
+        Bundle bundle = bundleTable.get(swiftletName);
         if (bundle == null)
             throw new Exception("No bundle found for Swiftlet '" + swiftletName + "'");
         Document doc = XMLUtilities.createDocument(bundle.getBundleConfig());
@@ -803,9 +834,7 @@ public class SwiftletManager {
      */
     public Swiftlet getSwiftlet(String swiftletName) {
         Swiftlet swiftlet = null;
-        synchronized (sSemaphore) {
-            swiftlet = (Swiftlet) swiftletTable.get(swiftletName);
-        }
+        swiftlet = swiftletTable.get(swiftletName);
         if (swiftlet != null && swiftlet.getState() == Swiftlet.STATE_ACTIVE && swiftlet.isKernel())
             return swiftlet;
         return null;
@@ -813,9 +842,7 @@ public class SwiftletManager {
 
     Swiftlet _getSwiftlet(String swiftletName) {
         Swiftlet swiftlet = null;
-        synchronized (sSemaphore) {
-            swiftlet = (Swiftlet) swiftletTable.get(swiftletName);
-        }
+        swiftlet = swiftletTable.get(swiftletName);
         if (swiftlet != null && swiftlet.getState() == Swiftlet.STATE_ACTIVE)
             return swiftlet;
         return null;
@@ -830,9 +857,7 @@ public class SwiftletManager {
      */
     public final int getSwiftletState(String swiftletName) throws UnknownSwiftletException {
         Swiftlet swiftlet = null;
-        synchronized (sSemaphore) {
-            swiftlet = (Swiftlet) swiftletTable.get(swiftletName);
-        }
+        swiftlet = swiftletTable.get(swiftletName);
         if (swiftlet == null)
             throw new UnknownSwiftletException("Swiftlet '" + swiftletName + "' is unknown");
         return swiftlet.getState();
@@ -845,41 +870,41 @@ public class SwiftletManager {
      * @return true/false.
      */
     public final boolean isSwiftletDefined(String swiftletName) {
-        boolean b = false;
-        synchronized (sSemaphore) {
-            b = swiftletTable.containsKey(swiftletName);
-        }
-        return b;
+        return swiftletTable.containsKey(swiftletName);
     }
 
     private void stopAllSwiftlets() {
-        trace("stopAllSwiftlets");
-        List al = new ArrayList();
-        synchronized (sSemaphore) {
+        lock.readLock().lock();
+        try {
+            trace("stopAllSwiftlets");
+            List<Swiftlet> al = new ArrayList<Swiftlet>();
             for (Object o : RouterConfiguration.Singleton().getConfigurations().entrySet()) {
                 Entity entity = (Entity) ((Map.Entry) o).getValue();
                 if (entity instanceof Configuration) {
                     Configuration conf = (Configuration) entity;
                     if (conf.isExtension()) {
                         String name = conf.getName();
-                        Swiftlet swiftlet = (Swiftlet) swiftletTable.get(name);
+                        Swiftlet swiftlet = swiftletTable.get(name);
                         if (swiftlet != null && swiftlet.getState() == Swiftlet.STATE_ACTIVE) {
                             al.add(swiftlet);
                         }
                     }
                 }
             }
-        }
-        for (Object anAl : al) {
-            Swiftlet swiftlet = (Swiftlet) anAl;
-            trace("stopAllSwiftlets: Stopping swiftlet '" + swiftlet.getName() + "'");
-            try {
-                shutdownSwiftlet(swiftlet);
-            } catch (SwiftletException ignored) {
+            for (Swiftlet anAl : al) {
+                Swiftlet swiftlet = anAl;
+                trace("stopAllSwiftlets: Stopping swiftlet '" + swiftlet.getName() + "'");
+                try {
+                    shutdownSwiftlet(swiftlet);
+                } catch (SwiftletException ignored) {
+                }
+                swiftlet.setStartupTime(-1);
+                trace("stopAllSwiftlets: Swiftlet " + swiftlet.getName() + " has been stopped");
             }
-            swiftlet.setStartupTime(-1);
-            trace("stopAllSwiftlets: Swiftlet " + swiftlet.getName() + " has been stopped");
+        } finally {
+            lock.readLock().unlock();
         }
+
     }
 
     public void shutdown(boolean removeShutdownHook) {
@@ -891,24 +916,30 @@ public class SwiftletManager {
     /**
      * Performs a shutdown of the router.
      */
-    public synchronized void shutdown() {
-        System.out.println("Shutdown SwiftMQ " + Version.getKernelVersion() + " " + "[" + getRouterName() + "] ...");
-        trace("shutdown");
-        saveConfigIfDirty();
-        if (configfileWatchdog != null)
-            timerSwiftlet.removeTimerListener(configfileWatchdog);
-        memoryMeter.close();
-        stopAllSwiftlets();
-        stopKernelSwiftlets();
-        listeners.clear();
-        allListeners.clear();
-        kernelListeners.clear();
-        swiftletTable.clear();
-        RouterConfiguration.removeInstance();
-        PoolManager.reset();
-        traceSpace = null;
-        logSwiftlet = null;
-        System.out.println("Shutdown SwiftMQ " + Version.getKernelVersion() + " " + "[" + getRouterName() + "] DONE.");
+    public void shutdown() {
+        lock.writeLock().lock();
+        try {
+            System.out.println("Shutdown SwiftMQ " + Version.getKernelVersion() + " " + "[" + getRouterName() + "] ...");
+            trace("shutdown");
+            saveConfigIfDirty();
+            if (configfileWatchdog != null)
+                timerSwiftlet.removeTimerListener(configfileWatchdog);
+            memoryMeter.close();
+            stopAllSwiftlets();
+            stopKernelSwiftlets();
+            listeners.clear();
+            allListeners.clear();
+            kernelListeners.clear();
+            swiftletTable.clear();
+            RouterConfiguration.removeInstance();
+            PoolManager.reset();
+            traceSpace = null;
+            logSwiftlet = null;
+            System.out.println("Shutdown SwiftMQ " + Version.getKernelVersion() + " " + "[" + getRouterName() + "] DONE.");
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     /**
@@ -917,19 +948,19 @@ public class SwiftletManager {
      * @return router name.
      */
     public String getRouterName() {
-        return routerName;
+        return routerName.get();
     }
 
     /**
      * Saves this router's configuration.
      */
     public void saveConfiguration() {
-        saveLock.lock();
+        lock.writeLock().lock();
         try {
             saveConfiguration(RouterConfiguration.Singleton());
             configDirty.set(false);
         } finally {
-            saveLock.unlock();
+            lock.writeLock().unlock();
         }
     }
 
@@ -938,11 +969,11 @@ public class SwiftletManager {
     }
 
     protected String[] saveConfiguration(RouterConfigInstance entity) {
-        ArrayList al = new ArrayList();
+        List<String> al = new ArrayList<String>();
         al.add(TreeCommands.INFO);
         try {
             String backupFile = configFilename + fmt.format(new Date());
-            File file = new File(configFilename);
+            File file = new File(configFilename.get());
             file.renameTo(new File(backupFile));
             new NumberBackupFileReducer(file.getParent(), file.getName() + ".", 15).process();
             al.add("Configuration backed up to file '" + backupFile + "'.");
@@ -954,9 +985,9 @@ public class SwiftletManager {
             doc.addComment("  SwiftMQ Configuration. Last Save Time: " + new Date() + "  ");
             Element root = DocumentHelper.createElement("router");
             root.addAttribute("name", (String) entity.getEntity(Configuration.ENV_ENTITY).getProperty("routername").getValue());
-            root.addAttribute("kernelpath", routerConfig.getRootElement().attributeValue("kernelpath"));
+            root.addAttribute("kernelpath", routerConfig.get().getRootElement().attributeValue("kernelpath"));
             root.addAttribute("release", Version.getKernelConfigRelease());
-            root.addAttribute("startorder", routerConfig.getRootElement().attributeValue("startorder"));
+            root.addAttribute("startorder", routerConfig.get().getRootElement().attributeValue("startorder"));
             boolean b = (Boolean) entity.getEntity(Configuration.ENV_ENTITY).getProperty("use-smart-tree").getValue();
             if (!b)
                 root.addAttribute("use-smart-tree", "false");
@@ -974,7 +1005,7 @@ public class SwiftletManager {
                 if (c instanceof Configuration)
                     XMLUtilities.configToXML((Configuration) c, root);
             }
-            XMLUtilities.writeDocument(doc, configFilename);
+            XMLUtilities.writeDocument(doc, configFilename.get());
             al.add("Configuration saved to file '" + configFilename + "'.");
         } catch (Exception e) {
             al.add("Error saving configuration: " + e);
@@ -983,7 +1014,7 @@ public class SwiftletManager {
     }
 
     private Configuration getConfigurationTemplate(String swiftletName) throws Exception {
-        Bundle bundle = (Bundle) bundleTable.get(swiftletName);
+        Bundle bundle = bundleTable.get(swiftletName);
         if (bundle == null)
             return null;
         Configuration c = XMLUtilities.createConfigurationTemplate(bundle.getBundleConfig());
@@ -992,11 +1023,11 @@ public class SwiftletManager {
     }
 
     private Configuration fillConfiguration(Configuration template) throws Exception {
-        return XMLUtilities.fillConfiguration(template, routerConfig);
+        return XMLUtilities.fillConfiguration(template, routerConfig.get());
     }
 
     Configuration fillConfigurationFromTemplate(String swiftletName, Document routerConfigDoc) throws Exception {
-        Bundle bundle = (Bundle) bundleTable.get(swiftletName);
+        Bundle bundle = bundleTable.get(swiftletName);
         if (bundle == null)
             return null;
         Configuration template = XMLUtilities.createConfigurationTemplate(bundle.getBundleConfig());
@@ -1046,14 +1077,12 @@ public class SwiftletManager {
      */
     public final void addSwiftletManagerListener(String swiftletName, SwiftletManagerListener l) {
         trace("addSwiftletManagerListener: Swiftlet " + swiftletName + "', adding SwiftletManagerListener");
-        synchronized (lSemaphore) {
-            HashSet qListeners = (HashSet) listeners.get(swiftletName);
-            if (qListeners == null) {
-                qListeners = new HashSet();
-                listeners.put(swiftletName, qListeners);
-            }
-            qListeners.add(l);
+        HashSet<SwiftletManagerListener> qListeners = listeners.get(swiftletName);
+        if (qListeners == null) {
+            qListeners = new HashSet<SwiftletManagerListener>();
+            listeners.put(swiftletName, qListeners);
         }
+        qListeners.add(l);
     }
 
     /**
@@ -1063,9 +1092,7 @@ public class SwiftletManager {
      */
     public final void addSwiftletManagerListener(SwiftletManagerListener l) {
         trace("addSwiftletManagerListener: adding SwiftletManagerListener");
-        synchronized (lSemaphore) {
-            allListeners.add(l);
-        }
+        allListeners.add(l);
     }
 
     /**
@@ -1076,13 +1103,11 @@ public class SwiftletManager {
      */
     public final void removeSwiftletManagerListener(String swiftletName, SwiftletManagerListener l) {
         trace("removeSwiftletManagerListener: Swiftlet " + swiftletName + "', removing SwiftletManagerListener");
-        synchronized (lSemaphore) {
-            HashSet qListeners = (HashSet) listeners.get(swiftletName);
-            if (qListeners != null) {
-                qListeners.remove(l);
-                if (qListeners.isEmpty())
-                    listeners.put(swiftletName, null);
-            }
+        HashSet<SwiftletManagerListener> qListeners = listeners.get(swiftletName);
+        if (qListeners != null) {
+            qListeners.remove(l);
+            if (qListeners.isEmpty())
+                listeners.put(swiftletName, null);
         }
     }
 
@@ -1093,9 +1118,7 @@ public class SwiftletManager {
      */
     public final void removeSwiftletManagerListener(SwiftletManagerListener l) {
         trace("removeSwiftletManagerListener: removing SwiftletManagerListener");
-        synchronized (lSemaphore) {
-            allListeners.remove(l);
-        }
+        allListeners.remove(l);
     }
 
     /**
@@ -1105,9 +1128,7 @@ public class SwiftletManager {
      */
     public final void addKernelStartupListener(KernelStartupListener l) {
         trace("addKernelStartupListener: adding KernelStartupListener");
-        synchronized (lSemaphore) {
-            kernelListeners.add(l);
-        }
+        kernelListeners.add(l);
     }
 
     /**
@@ -1117,69 +1138,61 @@ public class SwiftletManager {
      */
     public final void removeKernelStartupListener(KernelStartupListener l) {
         trace("removeKernelStartupListener: removing KernelStartupListener");
-        synchronized (lSemaphore) {
-            kernelListeners.remove(l);
-        }
+        kernelListeners.remove(l);
     }
 
     protected void fireKernelStartedEvent() {
         trace("fireKernelStartedEvent");
-        Set cloned = null;
-        synchronized (lSemaphore) {
-            cloned = (Set) ((HashSet) kernelListeners).clone();
-        }
-        for (Object aCloned : cloned) {
-            ((KernelStartupListener) aCloned).kernelStarted();
+        Set<? extends KernelStartupListener> cloned = null;
+        cloned = (Set<? extends KernelStartupListener>) ((HashSet) kernelListeners).clone();
+        for (KernelStartupListener aCloned : cloned) {
+            (aCloned).kernelStarted();
         }
     }
 
     protected void fireSwiftletManagerEvent(String swiftletName, String methodName, SwiftletManagerEvent evt) {
         trace("fireSwiftletManagerEvent: Swiftlet " + swiftletName + "', method: " + methodName);
-        SwiftletManagerListener[] myListeners = null;
-        synchronized (lSemaphore) {
-            HashSet qListeners = (HashSet) listeners.get(swiftletName);
-            if (qListeners != null) {
-                myListeners = (SwiftletManagerListener[]) qListeners.toArray(new SwiftletManagerListener[qListeners.size()]);
+
+        // Notify listeners specific to the swiftlet
+        Set<SwiftletManagerListener> qListeners = listeners.get(swiftletName);
+        if (qListeners != null) {
+            notifyListeners(qListeners, methodName, evt);
+        }
+
+        // Notify all listeners
+        notifyListeners(allListeners, methodName, evt);
+    }
+
+    private void notifyListeners(Set<SwiftletManagerListener> listeners, String methodName, SwiftletManagerEvent evt) {
+        for (SwiftletManagerListener listener : listeners) {
+            switch (methodName) {
+                case "swiftletStartInitiated":
+                    listener.swiftletStartInitiated(evt);
+                    break;
+                case "swiftletStarted":
+                    listener.swiftletStarted(evt);
+                    break;
+                case "swiftletStopInitiated":
+                    listener.swiftletStopInitiated(evt);
+                    break;
+                case "swiftletStopped":
+                    listener.swiftletStopped(evt);
+                    break;
             }
         }
-        if (myListeners != null) {
-            for (SwiftletManagerListener myListener : myListeners) {
-                SwiftletManagerListener l = (SwiftletManagerListener) myListener;
-                switch (methodName) {
-                    case "swiftletStartInitiated":
-                        l.swiftletStartInitiated(evt);
-                        break;
-                    case "swiftletStarted":
-                        l.swiftletStarted(evt);
-                        break;
-                    case "swiftletStopInitiated":
-                        l.swiftletStopInitiated(evt);
-                        break;
-                    case "swiftletStopped":
-                        l.swiftletStopped(evt);
-                        break;
-                }
-            }
+    }
+
+    public class ConcurrentHashMapWithNulls<K, V> extends ConcurrentHashMap<K, V> {
+        private final Object NULL_PLACEHOLDER = new Object();
+
+        @SuppressWarnings("unchecked")
+        public V put(K key, V value) {
+            return value == null ? super.put(key, (V) NULL_PLACEHOLDER) : super.put(key, value);
         }
-        myListeners = (SwiftletManagerListener[]) allListeners.toArray(new SwiftletManagerListener[allListeners.size()]);
-        if (myListeners != null) {
-            for (SwiftletManagerListener myListener : myListeners) {
-                SwiftletManagerListener l = (SwiftletManagerListener) myListener;
-                switch (methodName) {
-                    case "swiftletStartInitiated":
-                        l.swiftletStartInitiated(evt);
-                        break;
-                    case "swiftletStarted":
-                        l.swiftletStarted(evt);
-                        break;
-                    case "swiftletStopInitiated":
-                        l.swiftletStopInitiated(evt);
-                        break;
-                    case "swiftletStopped":
-                        l.swiftletStopped(evt);
-                        break;
-                }
-            }
+
+        public V get(Object key) {
+            V value = super.get(key);
+            return value == NULL_PLACEHOLDER ? null : value;
         }
     }
 

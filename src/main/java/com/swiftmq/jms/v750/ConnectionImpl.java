@@ -47,7 +47,10 @@ import javax.jms.Queue;
 import javax.jms.*;
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class ConnectionImpl extends RequestServiceRegistry
         implements SwiftMQConnection, Connection, ReplyHandler, RequestHandler, TimerListener, InboundHandler, ExceptionHandler, RecreatableConnection {
@@ -71,9 +74,9 @@ public class ConnectionImpl extends RequestServiceRegistry
     String myHostname = null;
     ExceptionListener exceptionListener = null;
     RequestRegistry requestRegistry = null;
-    List sessionList = Collections.synchronizedList(new ArrayList());
-    List connectionConsumerList = Collections.synchronizedList(new ArrayList());
-    Map tmpQueues = Collections.synchronizedMap(new HashMap());
+    List sessionList = new CopyOnWriteArrayList<>();
+    List connectionConsumerList = new CopyOnWriteArrayList<>();
+    Map tmpQueues = new ConcurrentHashMap<>();
     DumpableFactory dumpableFactory = new com.swiftmq.jms.smqp.SMQPFactory(new com.swiftmq.jms.smqp.v750.SMQPFactory());
     boolean cancelled = false;
     boolean clientIdAllowed = true;
@@ -109,6 +112,7 @@ public class ConnectionImpl extends RequestServiceRegistry
     volatile JMSSecurityException lastSecurityException = null;
     volatile InvalidVersionException lastInvalidVersionException = null;
     AtomicBoolean inputActiveIndicator = null;
+    final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
     protected ConnectionImpl(String userName, String password, Reconnector reconnector)
             throws JMSException {
@@ -327,15 +331,25 @@ public class ConnectionImpl extends RequestServiceRegistry
     }
 
     private void notifyReconnectListener() {
-        if (reconnectListeners.size() == 0)
-            return;
+        lock.readLock().lock();
+        try {
+            if (reconnectListeners.size() == 0)
+                return;
+        } finally {
+            lock.readLock().unlock();
+        }
+
         new Thread() {
             public void run() {
-                synchronized (reconnectListeners) {
+                lock.readLock().lock();
+                try {
                     for (int i = 0; i < reconnectListeners.size(); i++) {
                         ((ReconnectListener) reconnectListeners.get(i)).reconnected(connection.getHostname(), connection.getPort());
                     }
+                } finally {
+                    lock.readLock().unlock();
                 }
+
             }
         }.start();
     }
@@ -469,21 +483,35 @@ public class ConnectionImpl extends RequestServiceRegistry
         this.duplicateMessageDetection = duplicateMessageDetection;
     }
 
-    public synchronized void setDuplicateBacklogSize(int duplicateBacklogSize) {
-        this.duplicateBacklogSize = duplicateBacklogSize;
-        duplicateLog.resize(duplicateBacklogSize);
+    public void setDuplicateBacklogSize(int duplicateBacklogSize) {
+        lock.writeLock().lock();
+        try {
+            this.duplicateBacklogSize = duplicateBacklogSize;
+            duplicateLog.resize(duplicateBacklogSize);
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     public void addReconnectListener(ReconnectListener listener) {
-        synchronized (reconnectListeners) {
+        lock.writeLock().lock();
+        try {
             reconnectListeners.add(listener);
+        } finally {
+            lock.writeLock().unlock();
         }
+
     }
 
     public void removeReconnectListener(ReconnectListener listener) {
-        synchronized (reconnectListeners) {
+        lock.writeLock().lock();
+        try {
             reconnectListeners.remove(listener);
+        } finally {
+            lock.writeLock().unlock();
         }
+
     }
 
     void startKeepAlive(long keepaliveInterval) {
@@ -523,30 +551,60 @@ public class ConnectionImpl extends RequestServiceRegistry
         }
     }
 
-    synchronized void increaseDuplicateLogSize(int extend) {
-        duplicateLog.resize(duplicateLog.getMax() + extend);
-    }
-
-    synchronized void decreaseDuplicateLogSize(int extend) {
-        duplicateLog.resize(Math.max(500, duplicateLog.getMax() - extend));
-    }
-
-    synchronized void addToDuplicateLog(Set rollbackLog) {
-        duplicateLog.addAll(rollbackLog);
-    }
-
-    synchronized boolean isDuplicate(String id) {
-        boolean rc = false;
-        if (duplicateLog.contains(id)) {
-            rc = true;
-        } else {
-            duplicateLog.add(id);
+    void increaseDuplicateLogSize(int extend) {
+        lock.writeLock().lock();
+        try {
+            duplicateLog.resize(duplicateLog.getMax() + extend);
+        } finally {
+            lock.writeLock().unlock();
         }
-        return rc;
+
     }
 
-    synchronized void removeFromDuplicateLog(String id) {
-        duplicateLog.remove(id);
+    void decreaseDuplicateLogSize(int extend) {
+        lock.writeLock().lock();
+        try {
+            duplicateLog.resize(Math.max(500, duplicateLog.getMax() - extend));
+        } finally {
+            lock.writeLock().unlock();
+        }
+
+    }
+
+    void addToDuplicateLog(Set rollbackLog) {
+        lock.writeLock().lock();
+        try {
+            duplicateLog.addAll(rollbackLog);
+        } finally {
+            lock.writeLock().unlock();
+        }
+
+    }
+
+    boolean isDuplicate(String id) {
+        lock.writeLock().lock();
+        try {
+            boolean rc = false;
+            if (duplicateLog.contains(id)) {
+                rc = true;
+            } else {
+                duplicateLog.add(id);
+            }
+            return rc;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
+    }
+
+    void removeFromDuplicateLog(String id) {
+        lock.writeLock().lock();
+        try {
+            duplicateLog.remove(id);
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     void addSession(Session session) {
@@ -886,110 +944,134 @@ public class ConnectionImpl extends RequestServiceRegistry
         }
     }
 
-    public synchronized void start() throws JMSException {
-        verifyState();
-        clientIdAllowed = false;
+    public void start() throws JMSException {
+        lock.writeLock().lock();
+        try {
+            verifyState();
+            clientIdAllowed = false;
 
-        if (connectionState == CONNECTED_STOPPED) {
-            for (int i = 0; i < sessionList.size(); i++) {
-                ((SessionImpl) sessionList.get(i)).startSession();
+            if (connectionState == CONNECTED_STOPPED) {
+                for (int i = 0; i < sessionList.size(); i++) {
+                    ((SessionImpl) sessionList.get(i)).startSession();
+                }
+                for (int i = 0; i < connectionConsumerList.size(); i++) {
+                    ((ConnectionConsumerImpl) connectionConsumerList.get(i)).startConsumer();
+                }
+                connectionState = CONNECTED_STARTED;
+            } else if (connectionState == DISCONNECTED) {
+                throw new IllegalStateException("could not start - connection is disconnected!");
             }
-            for (int i = 0; i < connectionConsumerList.size(); i++) {
-                ((ConnectionConsumerImpl) connectionConsumerList.get(i)).startConsumer();
-            }
-            connectionState = CONNECTED_STARTED;
-        } else if (connectionState == DISCONNECTED) {
-            throw new IllegalStateException("could not start - connection is disconnected!");
+        } finally {
+            lock.writeLock().unlock();
         }
+
     }
 
     public void stop() throws JMSException {
-        verifyState();
-        clientIdAllowed = false;
+        lock.writeLock().lock();
+        try {
+            verifyState();
+            clientIdAllowed = false;
 
-        if (connectionState == CONNECTED_STARTED) {
-            for (int i = 0; i < sessionList.size(); i++) {
-                ((SessionImpl) sessionList.get(i)).stopSession();
+            if (connectionState == CONNECTED_STARTED) {
+                for (int i = 0; i < sessionList.size(); i++) {
+                    ((SessionImpl) sessionList.get(i)).stopSession();
+                }
+                for (int i = 0; i < connectionConsumerList.size(); i++) {
+                    ((ConnectionConsumerImpl) connectionConsumerList.get(i)).stopConsumer();
+                }
+                connectionState = CONNECTED_STOPPED;
+            } else if (connectionState == DISCONNECTED) {
+                throw new IllegalStateException("could not stop - connection is disconnected!");
             }
-            for (int i = 0; i < connectionConsumerList.size(); i++) {
-                ((ConnectionConsumerImpl) connectionConsumerList.get(i)).stopConsumer();
-            }
-            connectionState = CONNECTED_STOPPED;
-        } else if (connectionState == DISCONNECTED) {
-            throw new IllegalStateException("could not stop - connection is disconnected!");
+        } finally {
+            lock.writeLock().unlock();
         }
+
     }
 
     public void close() throws JMSException {
-        if (closed)
-            return;
-
-        if (connectionState == DISCONNECTED) {
-            throw new javax.jms.IllegalStateException("could not close - connection is disconnected!");
-        }
-
+        lock.writeLock().lock();
         try {
-            TimerRegistry.Singleton().removeTimerListener(keepaliveInterval, this);
+            if (closed)
+                return;
 
-            setExceptionListener(null);
-            SessionImpl[] si = (SessionImpl[]) sessionList.toArray(new SessionImpl[sessionList.size()]);
-            for (int i = 0; i < si.length; i++) {
-                SessionImpl session = (SessionImpl) si[i];
-                if (!session.isClosed())
-                    session.close();
-            }
-            ConnectionConsumerImpl[] ci = (ConnectionConsumerImpl[]) connectionConsumerList.toArray(new ConnectionConsumerImpl[connectionConsumerList.size()]);
-            for (int i = 0; i < ci.length; i++) {
-                ConnectionConsumerImpl cc = (ConnectionConsumerImpl) ci[i];
-                if (!cc.isClosed())
-                    cc.close();
+            if (connectionState == DISCONNECTED) {
+                throw new IllegalStateException("could not close - connection is disconnected!");
             }
 
-            requestRegistry.request(new DisconnectRequest());
-            connector.close();
+            try {
+                TimerRegistry.Singleton().removeTimerListener(keepaliveInterval, this);
 
-            closed = true;
-            connectionQueue.stopQueue();
-            reconnector.invalidateConnection();
-            requestRegistry.cancelAllRequests(new TransportException("Connection closed"), false);
-            requestRegistry.close();
-            sessionList.clear();
-            tmpQueues.clear();
-            duplicateLog.clear();
-            connectionState = DISCONNECTED;
-        } catch (Exception e) {
-            throw new JMSException(e.getMessage());
+                setExceptionListener(null);
+                SessionImpl[] si = (SessionImpl[]) sessionList.toArray(new SessionImpl[sessionList.size()]);
+                for (int i = 0; i < si.length; i++) {
+                    SessionImpl session = (SessionImpl) si[i];
+                    if (!session.isClosed())
+                        session.close();
+                }
+                ConnectionConsumerImpl[] ci = (ConnectionConsumerImpl[]) connectionConsumerList.toArray(new ConnectionConsumerImpl[connectionConsumerList.size()]);
+                for (int i = 0; i < ci.length; i++) {
+                    ConnectionConsumerImpl cc = (ConnectionConsumerImpl) ci[i];
+                    if (!cc.isClosed())
+                        cc.close();
+                }
+
+                requestRegistry.request(new DisconnectRequest());
+                connector.close();
+
+                closed = true;
+                connectionQueue.stopQueue();
+                reconnector.invalidateConnection();
+                requestRegistry.cancelAllRequests(new TransportException("Connection closed"), false);
+                requestRegistry.close();
+                sessionList.clear();
+                tmpQueues.clear();
+                duplicateLog.clear();
+                connectionState = DISCONNECTED;
+            } catch (Exception e) {
+                throw new JMSException(e.getMessage());
+            }
+        } finally {
+            lock.writeLock().unlock();
         }
+
     }
 
     public void cancel(boolean closeReconnector) {
-        if (!cancelled) {
-            if (closeReconnector)
-                connector.close();
-            if (connectionQueue != null)
-                connectionQueue.stopQueue();
-            cancelled = true;
-            closed = true;
-            for (int i = 0; i < sessionList.size(); i++) {
-                SessionImpl session = (SessionImpl) sessionList.get(i);
-                session.cancel();
+        lock.writeLock().lock();
+        try {
+            if (!cancelled) {
+                if (closeReconnector)
+                    connector.close();
+                if (connectionQueue != null)
+                    connectionQueue.stopQueue();
+                cancelled = true;
+                closed = true;
+                for (int i = 0; i < sessionList.size(); i++) {
+                    SessionImpl session = (SessionImpl) sessionList.get(i);
+                    session.cancel();
+                }
+                sessionList.clear();
+                for (int i = 0; i < connectionConsumerList.size(); i++) {
+                    ConnectionConsumerImpl cc = (ConnectionConsumerImpl) connectionConsumerList.get(i);
+                    cc.cancel();
+                }
+                connectionConsumerList.clear();
+                TimerRegistry.Singleton().removeTimerListener(keepaliveInterval, this);
+                reconnector.invalidateConnection();
             }
-            sessionList.clear();
-            for (int i = 0; i < connectionConsumerList.size(); i++) {
-                ConnectionConsumerImpl cc = (ConnectionConsumerImpl) connectionConsumerList.get(i);
-                cc.cancel();
+            if (requestRegistry != null) {
+                requestRegistry.cancelAllRequests(new TransportException("Connection closed"), false);
+                requestRegistry.close();
             }
-            connectionConsumerList.clear();
-            TimerRegistry.Singleton().removeTimerListener(keepaliveInterval, this);
-            reconnector.invalidateConnection();
+            tmpQueues.clear();
+            duplicateLog.clear();
+            connectionState = DISCONNECTED;
+        } finally {
+            lock.writeLock().unlock();
         }
-        if (requestRegistry != null) {
-            requestRegistry.cancelAllRequests(new TransportException("Connection closed"), false);
-            requestRegistry.close();
-        }
-        tmpQueues.clear();
-        duplicateLog.clear();
-        connectionState = DISCONNECTED;
+
     }
 
     public void cancelAndNotify(Exception exception, boolean closeReconnector) {

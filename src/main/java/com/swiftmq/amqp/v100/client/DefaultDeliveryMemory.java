@@ -20,8 +20,9 @@ package com.swiftmq.amqp.v100.client;
 import com.swiftmq.amqp.v100.generated.transport.definitions.DeliveryTag;
 
 import java.util.Collection;
-import java.util.LinkedHashMap;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Default implementation of a DeliveryMemory which stores the content in an internal map. It is used when no delivery memory is specified.
@@ -29,33 +30,39 @@ import java.util.Map;
  * @author IIT Software GmbH, Bremen/Germany, (c) 2012, All Rights Reserved
  */
 public class DefaultDeliveryMemory implements DeliveryMemory {
-    String linkName = null;
-    LinkedHashMap<DeliveryTag, UnsettledDelivery> unsettled = new LinkedHashMap<DeliveryTag, UnsettledDelivery>();
+    private volatile String linkName = null;
+    private final Map<DeliveryTag, UnsettledDelivery> unsettled = new ConcurrentHashMap<DeliveryTag, UnsettledDelivery>();
 
     public DefaultDeliveryMemory() {
     }
 
-    public synchronized String getLinkName() {
+    public String getLinkName() {
         return linkName;
     }
 
-    public synchronized void setLinkName(String linkName) {
+    public void setLinkName(String linkName) {
         this.linkName = linkName;
     }
 
-    public synchronized void addUnsettledDelivery(UnsettledDelivery unsettledDelivery) {
+    public void addUnsettledDelivery(UnsettledDelivery unsettledDelivery) {
         unsettled.put(unsettledDelivery.deliveryTag, unsettledDelivery);
     }
 
-    public synchronized void deliverySettled(DeliveryTag deliveryTag) {
+    public void deliverySettled(DeliveryTag deliveryTag) {
         unsettled.remove(deliveryTag);
     }
 
-    public synchronized int getNumberUnsettled() {
+    public int getNumberUnsettled() {
         return unsettled.size();
     }
 
-    public synchronized Collection<UnsettledDelivery> getUnsettled() {
-        return ((Map<DeliveryTag, UnsettledDelivery>) unsettled.clone()).values();
+    private Map<DeliveryTag, UnsettledDelivery> cloneMap() {
+        Map<DeliveryTag, UnsettledDelivery> clonedMap = new HashMap<>();
+        clonedMap.putAll(unsettled);
+        return clonedMap;
+    }
+
+    public Collection<UnsettledDelivery> getUnsettled() {
+        return cloneMap().values();
     }
 }

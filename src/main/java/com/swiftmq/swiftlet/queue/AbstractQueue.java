@@ -26,6 +26,8 @@ import com.swiftmq.tools.concurrent.AsyncCompletionCallback;
 
 import java.util.List;
 import java.util.SortedSet;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Abstract base class for queues used in SwiftMQ.
@@ -45,13 +47,13 @@ public abstract class AbstractQueue {
     protected volatile int maxMessages = -1;
     protected volatile int persistenceMode = AS_MESSAGE;
     protected boolean temporary = false;
-    protected FlowController flowController = null;
-    protected int receiverCount = 0;
+    protected final AtomicReference<FlowController> flowController = new AtomicReference<>();
+    protected final AtomicInteger receiverCount = new AtomicInteger();
     protected long cleanUpInterval = 0;
     protected int consumerMode = SHARED;
     String queueName;
     String localName;
-    QueueReceiverListener queueReceiverListener = null;
+    final AtomicReference<QueueReceiverListener> queueReceiverListener = new AtomicReference<>();
 
     /**
      * Returns the queue name
@@ -59,7 +61,6 @@ public abstract class AbstractQueue {
      * @return queue name
      */
     public String getQueueName() {
-        // SBgen: Get variable
         return (queueName);
     }
 
@@ -154,12 +155,12 @@ public abstract class AbstractQueue {
 
     }
 
-    public synchronized QueueReceiverListener getQueueReceiverListener() {
-        return queueReceiverListener;
+    public QueueReceiverListener getQueueReceiverListener() {
+        return queueReceiverListener.get();
     }
 
-    public synchronized void setQueueReceiverListener(QueueReceiverListener queueReceiverListener) {
-        this.queueReceiverListener = queueReceiverListener;
+    public void setQueueReceiverListener(QueueReceiverListener queueReceiverListener) {
+        this.queueReceiverListener.set(queueReceiverListener);
     }
 
     /**
@@ -167,8 +168,8 @@ public abstract class AbstractQueue {
      *
      * @return flow controller.
      */
-    public synchronized FlowController getFlowController() {
-        return flowController;
+    public FlowController getFlowController() {
+        return flowController.get();
     }
 
     /**
@@ -176,32 +177,32 @@ public abstract class AbstractQueue {
      *
      * @param flowController flow controller.
      */
-    public synchronized void setFlowController(FlowController flowController) {
-        this.flowController = flowController;
+    public void setFlowController(FlowController flowController) {
+        this.flowController.set(flowController);
         if (flowController != null)
-            flowController.setReceiverCount(receiverCount);
+            flowController.setReceiverCount(receiverCount.get());
     }
 
     /**
      * Increments the queue receiver count.
      */
-    public synchronized void incReceiverCount() {
-        receiverCount++;
-        if (flowController != null)
-            flowController.setReceiverCount(receiverCount);
-        if (queueReceiverListener != null)
-            queueReceiverListener.receiverCountChanged(this, receiverCount);
+    public void incReceiverCount() {
+        receiverCount.getAndIncrement();
+        if (flowController.get() != null)
+            flowController.get().setReceiverCount(receiverCount.get());
+        if (queueReceiverListener.get() != null)
+            queueReceiverListener.get().receiverCountChanged(this, receiverCount.get());
     }
 
     /**
      * Decrements the queue receiver count.
      */
-    public synchronized void decReceiverCount() {
-        receiverCount--;
-        if (flowController != null)
-            flowController.setReceiverCount(receiverCount);
-        if (queueReceiverListener != null)
-            queueReceiverListener.receiverCountChanged(this, receiverCount);
+    public void decReceiverCount() {
+        receiverCount.getAndDecrement();
+        if (flowController.get() != null)
+            flowController.get().setReceiverCount(receiverCount.get());
+        if (queueReceiverListener.get() != null)
+            queueReceiverListener.get().receiverCountChanged(this, receiverCount.get());
     }
 
     /**
@@ -209,8 +210,8 @@ public abstract class AbstractQueue {
      *
      * @return queue receiver count
      */
-    public synchronized int getReceiverCount() {
-        return receiverCount;
+    public int getReceiverCount() {
+        return receiverCount.get();
     }
 
     /**

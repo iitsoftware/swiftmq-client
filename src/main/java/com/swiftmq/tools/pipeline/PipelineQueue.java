@@ -22,11 +22,13 @@ import com.swiftmq.swiftlet.threadpool.AsyncTask;
 import com.swiftmq.swiftlet.threadpool.ThreadPool;
 import com.swiftmq.tools.queue.SingleProcessorQueue;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 public class PipelineQueue extends SingleProcessorQueue {
     ThreadPool myTP = null;
     String dispatchToken = null;
     POVisitor visitor = null;
-    boolean closed = false;
+    final AtomicBoolean closed = new AtomicBoolean(false);
     QueueProcessor queueProcessor = null;
 
     public PipelineQueue(ThreadPool myTP, String dispatchToken, POVisitor visitor) {
@@ -47,15 +49,15 @@ public class PipelineQueue extends SingleProcessorQueue {
         }
     }
 
-    public synchronized void close() {
+    public void close() {
         super.close();
-        closed = true;
+        closed.set(true);
     }
 
     private class QueueProcessor implements AsyncTask {
 
         public boolean isValid() {
-            return !closed;
+            return !closed.get();
         }
 
         public String getDispatchToken() {
@@ -70,7 +72,7 @@ public class PipelineQueue extends SingleProcessorQueue {
         }
 
         public void run() {
-            if (dequeue() && !closed)
+            if (dequeue() && !closed.get())
                 myTP.dispatchTask(this);
         }
     }

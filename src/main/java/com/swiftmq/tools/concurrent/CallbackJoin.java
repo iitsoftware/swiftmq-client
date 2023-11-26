@@ -18,6 +18,7 @@
 package com.swiftmq.tools.concurrent;
 
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public abstract class CallbackJoin {
     protected volatile boolean finalSuccess = true;
@@ -25,21 +26,19 @@ public abstract class CallbackJoin {
     protected volatile Exception finalException = null;
     AtomicInteger numberCallbacks = new AtomicInteger();
     volatile boolean blocked = true;
-    AsyncCompletionCallback next;
+    private final AtomicReference<AsyncCompletionCallback> nextRef = new AtomicReference<>();
 
     protected CallbackJoin(AsyncCompletionCallback next) {
-        this.next = next;
+        this.nextRef.set(next);
     }
 
     protected CallbackJoin() {
     }
 
-    private synchronized AsyncCompletionCallback getNext() {
-        if (blocked || next == null)
+    private AsyncCompletionCallback getNext() {
+        if (blocked || nextRef.get() == null)
             return null;
-        AsyncCompletionCallback myNext = next;
-        next = null;
-        return myNext;
+        return nextRef.getAndSet(null);  // Atomic get and set to null
     }
 
     private void checkNext() {

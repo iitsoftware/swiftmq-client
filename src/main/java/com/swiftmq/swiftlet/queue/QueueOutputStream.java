@@ -24,8 +24,8 @@ import javax.jms.DeliveryMode;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Hashtable;
-import java.util.Iterator;
 import java.util.Map;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * A QueueOutputStream is an output stream that is mapped to a queue. Together with
@@ -49,6 +49,7 @@ public class QueueOutputStream extends OutputStream {
     int count = 0;
     int seqNo = 0;
     boolean respectFlowControl = true;
+    ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
 
     /**
@@ -124,7 +125,6 @@ public class QueueOutputStream extends OutputStream {
      * @return chunk size.
      */
     public int getChunkSize() {
-        // SBgen: Get variable
         return (chunkSize);
     }
 
@@ -134,7 +134,6 @@ public class QueueOutputStream extends OutputStream {
      * @param chunkSize chunk size.
      */
     public void setChunkSize(int chunkSize) {
-        // SBgen: Assign variable
         this.chunkSize = chunkSize;
     }
 
@@ -155,19 +154,25 @@ public class QueueOutputStream extends OutputStream {
      *                     an <code>IOException</code> may be thrown if the
      *                     output stream has been closed.
      */
-    public synchronized void write(int b)
+    public void write(int b)
             throws IOException {
+        lock.writeLock().lock();
         try {
-            ensureMessage();
-            if (count >= chunkSize) {
-                flush();
+            try {
                 ensureMessage();
+                if (count >= chunkSize) {
+                    flush();
+                    ensureMessage();
+                }
+                currentMsg.writeByte((byte) b);
+                count++;
+            } catch (Exception e) {
+                throw new IOException(e.toString());
             }
-            currentMsg.writeByte((byte) b);
-            count++;
-        } catch (Exception e) {
-            throw new IOException(e.toString());
+        } finally {
+            lock.writeLock().unlock();
         }
+
     }
 
     /**
@@ -176,38 +181,44 @@ public class QueueOutputStream extends OutputStream {
      *
      * @throws IOException if an I/O error occurs.
      */
-    public synchronized void flush() throws IOException {
-        if (currentMsg == null)
-            return;
+    public void flush() throws IOException {
+        lock.writeLock().lock();
         try {
-            if (customMsgProp != null && seqNo == 0) {
-                for (Iterator iter = customMsgProp.entrySet().iterator(); iter.hasNext(); ) {
-                    Map.Entry entry = (Map.Entry) iter.next();
-                    currentMsg.setObjectProperty((String) entry.getKey(), entry.getValue());
-                }
-            }
-            currentMsg.setJMSDeliveryMode(deliveryMode);
-            currentMsg.setJMSDestination(queue);
-            currentMsg.setIntProperty(SIZE, count);
-            currentMsg.setIntProperty(SEQNO, seqNo);
-            transaction = queueSender.createTransaction();
-            transaction.putMessage(currentMsg);
-            transaction.commit();
-            if (respectFlowControl) {
-                long delay = queueSender.getFlowControlDelay();
-                if (delay > 0) {
-                    try {
-                        Thread.sleep(delay);
-                    } catch (Exception ignored) {
+            if (currentMsg == null)
+                return;
+            try {
+                if (customMsgProp != null && seqNo == 0) {
+                    for (Object o : customMsgProp.entrySet()) {
+                        Map.Entry entry = (Map.Entry) o;
+                        currentMsg.setObjectProperty((String) entry.getKey(), entry.getValue());
                     }
                 }
+                currentMsg.setJMSDeliveryMode(deliveryMode);
+                currentMsg.setJMSDestination(queue);
+                currentMsg.setIntProperty(SIZE, count);
+                currentMsg.setIntProperty(SEQNO, seqNo);
+                transaction = queueSender.createTransaction();
+                transaction.putMessage(currentMsg);
+                transaction.commit();
+                if (respectFlowControl) {
+                    long delay = queueSender.getFlowControlDelay();
+                    if (delay > 0) {
+                        try {
+                            Thread.sleep(delay);
+                        } catch (Exception ignored) {
+                        }
+                    }
+                }
+                currentMsg = null;
+                seqNo++;
+                count = 0;
+            } catch (Exception e) {
+                throw new IOException(e.toString());
             }
-            currentMsg = null;
-            seqNo++;
-            count = 0;
-        } catch (Exception e) {
-            throw new IOException(e.toString());
+        } finally {
+            lock.writeLock().unlock();
         }
+
     }
 
     /**
@@ -217,14 +228,20 @@ public class QueueOutputStream extends OutputStream {
      *
      * @throws IOException if an I/O error occurs.
      */
-    public synchronized void close() throws IOException {
-        ensureMessage();
+    public void close() throws IOException {
+        lock.writeLock().lock();
         try {
-            currentMsg.setBooleanProperty(EOF, true);
-        } catch (Exception e) {
-            throw new IOException(e.toString());
+            ensureMessage();
+            try {
+                currentMsg.setBooleanProperty(EOF, true);
+            } catch (Exception e) {
+                throw new IOException(e.toString());
+            }
+            flush();
+        } finally {
+            lock.writeLock().unlock();
         }
-        flush();
+
     }
 }
 

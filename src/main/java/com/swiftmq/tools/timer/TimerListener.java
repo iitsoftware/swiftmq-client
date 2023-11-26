@@ -24,6 +24,6 @@ package com.swiftmq.tools.timer;
  * @version 1.0
  */
 public interface TimerListener {
-    public void performTimeAction(TimerEvent evt);
+    void performTimeAction(TimerEvent evt);
 }
 

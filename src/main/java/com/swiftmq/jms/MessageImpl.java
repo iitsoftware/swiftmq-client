@@ -18,7 +18,6 @@
 package com.swiftmq.jms;
 
 import com.swiftmq.swiftlet.queue.MessageIndex;
-import com.swiftmq.tools.tracking.MessageTracker;
 import com.swiftmq.tools.util.DataByteArrayInputStream;
 import com.swiftmq.tools.util.DataByteArrayOutputStream;
 import com.swiftmq.tools.util.LazyUTF8String;
@@ -1392,21 +1391,9 @@ public class MessageImpl implements Message, Serializable {
      */
     public void acknowledge() throws JMSException {
         if (myConsumer != null) {
-            if (MessageTracker.enabled) {
-                MessageTracker.getInstance().track(this, new String[]{myConsumer.toString()}, "acknowledge ...");
-            }
             cancelled = myConsumer.acknowledgeMessage(this);
-            if (MessageTracker.enabled) {
-                MessageTracker.getInstance().track(this, new String[]{myConsumer.toString()}, "acknowledge done, cancelled=" + cancelled);
-            }
         } else if (mySession != null) {
-            if (MessageTracker.enabled) {
-                MessageTracker.getInstance().track(this, new String[]{mySession.toString()}, "acknowledge ...");
-            }
             cancelled = mySession.acknowledgeMessage(messageIndex);
-            if (MessageTracker.enabled) {
-                MessageTracker.getInstance().track(this, new String[]{mySession.toString()}, "acknowledge done, cancelled=" + cancelled);
-            }
         }
     }
 

@@ -23,12 +23,12 @@ import com.swiftmq.jms.smqp.v750.ProduceMessageReply;
 import com.swiftmq.jms.smqp.v750.ProduceMessageRequest;
 import com.swiftmq.jms.smqp.v750.SMQPUtil;
 import com.swiftmq.tools.requestreply.*;
-import com.swiftmq.tools.tracking.MessageTracker;
 import com.swiftmq.tools.util.DataByteArrayOutputStream;
 import com.swiftmq.tools.util.IdGenerator;
 
-import javax.jms.*;
 import javax.jms.IllegalStateException;
+import javax.jms.*;
+import java.io.IOException;
 
 public class MessageProducerImpl implements MessageProducerExtended, RequestRetryValidator {
     private static final boolean ASYNC_SEND = Boolean.valueOf(System.getProperty("swiftmq.jms.persistent.asyncsend", "false")).booleanValue();
@@ -52,7 +52,7 @@ public class MessageProducerImpl implements MessageProducerExtended, RequestRetr
     // JMS 1.1
     DestinationImpl destImpl = null;
     String clientId = null;
-    DataByteArrayOutputStream dbos = new DataByteArrayOutputStream(2048);
+
 
     public MessageProducerImpl(SessionImpl mySession, int producerId,
                                RequestRegistry requestRegistry,
@@ -184,9 +184,6 @@ public class MessageProducerImpl implements MessageProducerExtended, RequestRetr
         MessageImpl msg = (MessageImpl) message;
 
         if (transacted) {
-            if (MessageTracker.enabled) {
-                MessageTracker.getInstance().track((MessageImpl) msg, new String[]{mySession.myConnection.toString(), mySession.toString(), toString()}, "processSend, storeTransactedMessage");
-            }
             mySession.storeTransactedMessage(this, msg);
         } else {
             nSend++;
@@ -195,29 +192,13 @@ public class MessageProducerImpl implements MessageProducerExtended, RequestRetr
             try {
                 ProduceMessageRequest request = null;
                 if (!replyRequired) {
-                    byte[] b;
-                    synchronized (dbos) {
-                        dbos.rewind();
-                        msg.writeContent(dbos);
-                        b = new byte[dbos.getCount()];
-                        System.arraycopy(dbos.getBuffer(), 0, b, 0, b.length);
-                    }
+                    byte[] b = getBytes(msg);
                     request = new ProduceMessageRequest(this, mySession.dispatchId, producerId, null, b);
                 } else
                     request = new ProduceMessageRequest(this, mySession.dispatchId, producerId, msg, null);
                 request.setReplyRequired(replyRequired);
-                if (MessageTracker.enabled) {
-                    MessageTracker.getInstance().track((MessageImpl) msg, new String[]{mySession.myConnection.toString(), mySession.toString(), toString()}, "processSend ...");
-                }
                 reply = (ProduceMessageReply) requestRegistry.request(request);
-                if (MessageTracker.enabled) {
-                    MessageTracker.getInstance().track((MessageImpl) msg, new String[]{mySession.myConnection.toString(), mySession.toString(), toString()}, "processSend done, reply=" + reply);
-                }
             } catch (Exception e) {
-                if (MessageTracker.enabled) {
-                    MessageTracker.getInstance().track((MessageImpl) msg, new String[]{mySession.myConnection.toString(), mySession.toString(), toString()}, "processSend, exception=" + e);
-                }
-                e.printStackTrace();
                 throw ExceptionConverter.convert(e);
             }
 
@@ -239,6 +220,16 @@ public class MessageProducerImpl implements MessageProducerExtended, RequestRetr
         }
         // fix 1.2
         msg.reset();
+    }
+
+    private byte[] getBytes(MessageImpl msg) throws IOException {
+        DataByteArrayOutputStream dbos = new DataByteArrayOutputStream(2048);
+        byte[] b;
+        dbos.rewind();
+        msg.writeContent(dbos);
+        b = new byte[dbos.getCount()];
+        System.arraycopy(dbos.getBuffer(), 0, b, 0, b.length);
+        return b;
     }
 
     public void setDestinationImpl(Destination destImpl) {

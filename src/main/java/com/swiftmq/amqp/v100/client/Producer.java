@@ -36,8 +36,8 @@ import com.swiftmq.tools.util.IdGenerator;
 
 import java.io.IOException;
 import java.util.Collection;
-import java.util.Iterator;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * <p>A message producer, created from a session.
@@ -55,7 +55,7 @@ public class Producer extends Link {
     volatile long deliveryCountRcv = 0;
     volatile boolean drain = false;
     String uniqueId = IdGenerator.getInstance().nextId('/');
-    long msgId = 0;
+    AtomicLong msgId = new AtomicLong(0);
     boolean transactionController = false;
     POSendMessage waitingForFlowReleasePO = null;
 
@@ -139,8 +139,8 @@ public class Producer extends Link {
         try {
             if (remoteUnsettled != null) {
                 Map<AMQPType, AMQPType> map = remoteUnsettled.getValue();
-                for (Iterator iter = map.entrySet().iterator(); iter.hasNext(); ) {
-                    Map.Entry entry = (Map.Entry) iter.next();
+                for (Map.Entry<AMQPType, AMQPType> amqpTypeAMQPTypeEntry : map.entrySet()) {
+                    Map.Entry entry = amqpTypeAMQPTypeEntry;
                     final DeliveryTag deliveryTag = new DeliveryTag(((AMQPBinary) entry.getKey()).getValue());
                     final AMQPList deliveryState = (AMQPList) entry.getValue();
                     if (deliveryState != null) {
@@ -159,8 +159,7 @@ public class Producer extends Link {
             }
             if (deliveryMemory.getNumberUnsettled() > 0) {
                 Collection<UnsettledDelivery> unsettled = deliveryMemory.getUnsettled();
-                for (Iterator<UnsettledDelivery> iter = unsettled.iterator(); iter.hasNext(); ) {
-                    UnsettledDelivery unsettledDelivery = iter.next();
+                for (UnsettledDelivery unsettledDelivery : unsettled) {
                     if (unsettledDelivery.getMessage() != null) {
                         AMQPMessage msg = unsettledDelivery.getMessage();
                         if (msg.getTxnIdIF() == null) {
@@ -176,10 +175,10 @@ public class Producer extends Link {
         }
     }
 
-    private synchronized String nextMsgId() {
+    private String nextMsgId() {
         StringBuffer b = new StringBuffer(uniqueId);
         b.append('/');
-        b.append(msgId++);
+        b.append(msgId.getAndIncrement());
         return b.toString();
     }
 
