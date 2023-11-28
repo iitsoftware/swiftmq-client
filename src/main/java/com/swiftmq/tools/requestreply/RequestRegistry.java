@@ -17,7 +17,7 @@
 
 package com.swiftmq.tools.requestreply;
 
-import com.swiftmq.tools.collection.ArrayListTool;
+import com.swiftmq.tools.collection.ConcurrentExpandableList;
 import com.swiftmq.tools.concurrent.Semaphore;
 import com.swiftmq.tools.timer.TimerEvent;
 import com.swiftmq.tools.timer.TimerListener;
@@ -25,9 +25,8 @@ import com.swiftmq.tools.timer.TimerRegistry;
 
 import java.security.AccessController;
 import java.security.PrivilegedAction;
-import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class RequestRegistry implements TimerListener {
@@ -35,13 +34,13 @@ public class RequestRegistry implements TimerListener {
     public static final boolean DEBUG = Boolean.valueOf(System.getProperty("swiftmq.reconnect.debug", "false")).booleanValue();
     final static int TIMEOUT_CHECKINTERVAL = 10000;
     static boolean wrapPrivileged = false;
-    ArrayList requestList = new ArrayList();
+    ConcurrentExpandableList<Request> requestList = new ConcurrentExpandableList<>();
     RequestHandler requestHandler = null;
     boolean valid = true;
     boolean paused = false;
     volatile boolean requestTimeoutEnabled = true;
     Semaphore retrySem = null;
-    Set retrySet = new HashSet();
+    Set<Request> retrySet = ConcurrentHashMap.newKeySet();
     String debugString = null;
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
@@ -138,29 +137,24 @@ public class RequestRegistry implements TimerListener {
     }
 
     private void processRequest(Request req) {
-        lock.readLock().lock();
-        try {
-            if (!valid)
-                throw new RuntimeException("Invalid request (connection might be closed already)");
+        if (!valid)
+            throw new RuntimeException("Invalid request (connection might be closed already)");
 
-            req.setReply(null);
-            req.setDoRetry(false);
-            if (requestTimeoutEnabled)
-                req.setTimeout(System.currentTimeMillis() + SWIFTMQ_REQUEST_TIMEOUT);
+        req.setReply(null);
+        req.setDoRetry(false);
+        if (requestTimeoutEnabled)
+            req.setTimeout(System.currentTimeMillis() + SWIFTMQ_REQUEST_TIMEOUT);
 
-            // find next free index or add request to the end of the list
-            req.setRequestNumber(ArrayListTool.setFirstFreeOrExpand(requestList, req));
+        // find next free index or add request to the end of the list
+        req.setRequestNumber(requestList.add(req));
 
-            // perform request via request handler
-            if (!paused)
-                requestHandler.performRequest(req);
-            else {
-                if (DEBUG) System.out.println(debugString + ": Paused, request NOT sent: " + req);
-            }
-
-        } finally {
-            lock.readLock().unlock();
+        // perform request via request handler
+        if (!paused)
+            requestHandler.performRequest(req);
+        else {
+            if (DEBUG) System.out.println(debugString + ": Paused, request NOT sent: " + req);
         }
+
     }
 
     private Semaphore setReplySynchronized(Reply reply) {
@@ -172,7 +166,7 @@ public class RequestRegistry implements TimerListener {
                 Request req = (Request) requestList.get(reqNumber);
                 if (req != null) {
                     req.setReply(reply);
-                    requestList.set(reqNumber, null);
+                    requestList.remove(reqNumber);
                     sem = req._sem;
                     if (req.isWasRetry()) {
                         if (DEBUG) System.out.println(debugString + ": Reply from Retry: " + reply);
@@ -278,7 +272,7 @@ public class RequestRegistry implements TimerListener {
         try {
             int idx = requestList.indexOf(request);
             if (idx != -1) {
-                requestList.set(idx, null);
+                requestList.remove(idx);
                 request.setReply(null);
                 request._sem.notifySingleWaiter();
                 if (request.isDoRetry()) {
@@ -302,7 +296,7 @@ public class RequestRegistry implements TimerListener {
             for (int i = 0; i < requestList.size(); i++) {
                 Request req = (Request) requestList.get(i);
                 if (req != null && req.getTimeout() != -1 && req.getTimeout() < actTime) {
-                    requestList.set(i, null);
+                    requestList.remove(i);
                     Reply reply = req.createReply();
                     reply.setOk(false);
                     reply.setException(new TimeoutException("Request time out (" + SWIFTMQ_REQUEST_TIMEOUT + ") ms!"));

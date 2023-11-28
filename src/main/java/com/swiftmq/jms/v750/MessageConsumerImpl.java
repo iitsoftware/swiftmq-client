@@ -61,6 +61,7 @@ public class MessageConsumerImpl implements MessageConsumer, SwiftMQMessageConsu
     final AtomicBoolean receiveNoWaitFirstCall = new AtomicBoolean(true);
     final AtomicBoolean consumerStarted = new AtomicBoolean(false);
     final Lock lock = new ReentrantLock();
+    final Lock fillCacheLock = new ReentrantLock();
     final UninterruptableWaiter waiter = new UninterruptableWaiter(lock);
 
     public MessageConsumerImpl(boolean transacted, int acknowledgeMode, RequestRegistry requestRegistry,
@@ -166,12 +167,17 @@ public class MessageConsumerImpl implements MessageConsumer, SwiftMQMessageConsu
     }
 
     void fillCache(boolean force) {
-        if (isClosed() || fillCachePending.get() && !force)
+        fillCacheLock.lock();
+        try {
+            if (isClosed() || fillCachePending.get() && !force)
             return;
-        fillCachePending.set(true);
-        consumerStarted.set(true);
-        requestRegistry.request(new StartConsumerRequest(this, mySession.dispatchId, serverQueueConsumerId,
-                mySession.getMyDispatchId(), consumerId.get(), mySession.getMyConnection().getSmqpConsumerCacheSize(), mySession.getMyConnection().getSmqpConsumerCacheSizeKB()));
+            fillCachePending.set(true);
+            consumerStarted.set(true);
+            requestRegistry.request(new StartConsumerRequest(this, mySession.dispatchId, serverQueueConsumerId,
+                    mySession.getMyDispatchId(), consumerId.get(), mySession.getMyConnection().getSmqpConsumerCacheSize(), mySession.getMyConnection().getSmqpConsumerCacheSizeKB()));
+        } finally {
+            fillCacheLock.unlock();
+        }
     }
 
     void fillCache() {
