@@ -28,7 +28,8 @@ import com.swiftmq.net.client.InboundHandler;
 import com.swiftmq.net.client.Reconnector;
 import com.swiftmq.swiftlet.threadpool.AsyncTask;
 import com.swiftmq.swiftlet.threadpool.ThreadPool;
-import com.swiftmq.tools.collection.ListSet;
+import com.swiftmq.tools.collection.ConcurrentOrderedSet;
+import com.swiftmq.tools.collection.OrderedSet;
 import com.swiftmq.tools.concurrent.Semaphore;
 import com.swiftmq.tools.dump.Dumpable;
 import com.swiftmq.tools.dump.DumpableFactory;
@@ -50,6 +51,9 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class ConnectionImpl extends RequestServiceRegistry
@@ -94,23 +98,23 @@ public class ConnectionImpl extends RequestServiceRegistry
     boolean jmsMessageIdEnabled = false;
     boolean jmsMessageTimestampEnabled = false;
     boolean useThreadContextCL = false;
-    boolean duplicateMessageDetection = false;
-    int duplicateBacklogSize = 500;
-    ListSet duplicateLog = new ListSet(500);
+    final AtomicBoolean duplicateMessageDetection = new AtomicBoolean(false);
+    final AtomicInteger duplicateBacklogSize = new AtomicInteger(500);
+    OrderedSet duplicateLog = new ConcurrentOrderedSet(500);
     ConnectionQueue connectionQueue = null;
     ConnectionTask connectionTask = null;
     ThreadPool connectionPool = null;
     DataStreamOutputStream outStream = null;
     Reconnector reconnector = null;
-    GetAuthChallengeReply authReply = null;
+    final AtomicReference<GetAuthChallengeReply> authReply = new AtomicReference<>();
     Connector connector = null;
-    List reconnectListeners = new ArrayList();
-    boolean reconnectInProgress = false;
-    volatile long lastConnectionLost = -1;
-    volatile int connectionId = -1;
-    volatile int keepaliveCount = INITIAL_KEEPALIVE_COUNT;
-    volatile JMSSecurityException lastSecurityException = null;
-    volatile InvalidVersionException lastInvalidVersionException = null;
+    List<ReconnectListener> reconnectListeners = new CopyOnWriteArrayList<>();
+    final AtomicBoolean reconnectInProgress = new AtomicBoolean(false);
+    final AtomicLong lastConnectionLost = new AtomicLong(-1);
+    final AtomicInteger connectionId = new AtomicInteger(-1);
+    final AtomicInteger keepaliveCount = new AtomicInteger(INITIAL_KEEPALIVE_COUNT);
+    final AtomicReference<JMSSecurityException> lastSecurityException = new AtomicReference<>();
+    final AtomicReference<InvalidVersionException> lastInvalidVersionException = new AtomicReference<>();
     AtomicBoolean inputActiveIndicator = null;
     final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
@@ -122,10 +126,10 @@ public class ConnectionImpl extends RequestServiceRegistry
         connector = new Connector(reconnector);
         reconnectAndWait();
         if (connection == null) {
-            if (lastSecurityException != null)
-                throw lastSecurityException;
-            if (lastInvalidVersionException != null)
-                throw lastInvalidVersionException;
+            if (lastSecurityException.get() != null)
+                throw lastSecurityException.get();
+            if (lastInvalidVersionException.get() != null)
+                throw lastInvalidVersionException.get();
             else
                 throw new JMSException("Unable to create a connection to: " + reconnector.getServers());
         } else
@@ -167,7 +171,7 @@ public class ConnectionImpl extends RequestServiceRegistry
     private void reconnect() {
         if (reconnector.isDebug())
             System.out.println(new Date() + " " + toString() + ": initiate reconnect...");
-        lastConnectionLost = System.currentTimeMillis();
+        lastConnectionLost.set(System.currentTimeMillis());
         POReconnect po = new POReconnect(null, this);
         connector.dispatch(po);
         if (requestRegistry != null) {
@@ -180,7 +184,7 @@ public class ConnectionImpl extends RequestServiceRegistry
     private void reconnectAndWait() {
         if (reconnector.isDebug())
             System.out.println(new Date() + " " + toString() + ": initiate reconnect and wait ...");
-        lastConnectionLost = System.currentTimeMillis();
+        lastConnectionLost.set(System.currentTimeMillis());
         Semaphore sem = new Semaphore();
         POReconnect po = new POReconnect(sem, this);
         connector.dispatch(po);
@@ -190,11 +194,11 @@ public class ConnectionImpl extends RequestServiceRegistry
     }
 
     public long getLastConnectionLost() {
-        return lastConnectionLost;
+        return lastConnectionLost.get();
     }
 
     public int getConnectionId() {
-        return connection == null ? -1 : connectionId;
+        return connection == null ? -1 : connectionId.get();
     }
 
     public void prepareForReconnect() {
@@ -217,8 +221,8 @@ public class ConnectionImpl extends RequestServiceRegistry
 
     public void setVersionReply(Reply reply) throws Exception {
         if (!reply.isOk()) {
-            lastInvalidVersionException = new InvalidVersionException(reply.getException().getMessage());
-            throw lastInvalidVersionException;
+            lastInvalidVersionException.set(new InvalidVersionException(reply.getException().getMessage()));
+            throw lastInvalidVersionException.get();
         }
     }
 
@@ -228,26 +232,26 @@ public class ConnectionImpl extends RequestServiceRegistry
 
     public void setAuthenticateReply(Reply reply) throws Exception {
         if (!reply.isOk()) {
-            lastSecurityException = new JMSSecurityException(reply.getException().getMessage());
-            throw lastSecurityException;
+            lastSecurityException.set(new JMSSecurityException(reply.getException().getMessage()));
+            throw lastSecurityException.get();
         }
-        lastSecurityException = null;
-        authReply = (GetAuthChallengeReply) reply;
-        crFactory = (ChallengeResponseFactory) Class.forName(authReply.getFactoryClass()).newInstance();
+        lastSecurityException.set(null);
+        authReply.set((GetAuthChallengeReply) reply);
+        crFactory = (ChallengeResponseFactory) Class.forName(authReply.get().getFactoryClass()).newInstance();
     }
 
     public Request getAuthenticateResponse() {
-        byte[] challenge = authReply.getChallenge();
+        byte[] challenge = authReply.get().getChallenge();
         byte[] response = crFactory.createBytesResponse(challenge, password);
         return new AuthResponseRequest(0, response);
     }
 
     public void setAuthenticateResponseReply(Reply reply) throws Exception {
         if (!reply.isOk()) {
-            lastSecurityException = new JMSSecurityException(reply.getException().getMessage());
-            throw lastSecurityException;
+            lastSecurityException.set(new JMSSecurityException(reply.getException().getMessage()));
+            throw lastSecurityException.get();
         }
-        lastSecurityException = null;
+        lastSecurityException.set(null);
     }
 
     public Request getMetaDataRequest() {
@@ -306,7 +310,7 @@ public class ConnectionImpl extends RequestServiceRegistry
     public void handOver(com.swiftmq.net.client.Connection connection) {
         this.connection = connection;
         if (connection != null) {
-            connectionId++;
+            connectionId.getAndIncrement();
             myHostname = connection.getLocalHostname();
             connection.setInboundHandler(this);
             connection.setExceptionHandler(this);
@@ -331,25 +335,14 @@ public class ConnectionImpl extends RequestServiceRegistry
     }
 
     private void notifyReconnectListener() {
-        lock.readLock().lock();
-        try {
-            if (reconnectListeners.size() == 0)
-                return;
-        } finally {
-            lock.readLock().unlock();
-        }
+        if (reconnectListeners.size() == 0)
+            return;
 
         new Thread() {
             public void run() {
-                lock.readLock().lock();
-                try {
-                    for (int i = 0; i < reconnectListeners.size(); i++) {
-                        ((ReconnectListener) reconnectListeners.get(i)).reconnected(connection.getHostname(), connection.getPort());
-                    }
-                } finally {
-                    lock.readLock().unlock();
+                for (int i = 0; i < reconnectListeners.size(); i++) {
+                    reconnectListeners.get(i).reconnected(connection.getHostname(), connection.getPort());
                 }
-
             }
         }.start();
     }
@@ -476,42 +469,24 @@ public class ConnectionImpl extends RequestServiceRegistry
     }
 
     public boolean isDuplicateMessageDetection() {
-        return duplicateMessageDetection;
+        return duplicateMessageDetection.get();
     }
 
     public void setDuplicateMessageDetection(boolean duplicateMessageDetection) {
-        this.duplicateMessageDetection = duplicateMessageDetection;
+        this.duplicateMessageDetection.set(duplicateMessageDetection);
     }
 
     public void setDuplicateBacklogSize(int duplicateBacklogSize) {
-        lock.writeLock().lock();
-        try {
-            this.duplicateBacklogSize = duplicateBacklogSize;
+            this.duplicateBacklogSize.set(duplicateBacklogSize);
             duplicateLog.resize(duplicateBacklogSize);
-        } finally {
-            lock.writeLock().unlock();
-        }
-
     }
 
     public void addReconnectListener(ReconnectListener listener) {
-        lock.writeLock().lock();
-        try {
-            reconnectListeners.add(listener);
-        } finally {
-            lock.writeLock().unlock();
-        }
-
+        reconnectListeners.add(listener);
     }
 
     public void removeReconnectListener(ReconnectListener listener) {
-        lock.writeLock().lock();
-        try {
-            reconnectListeners.remove(listener);
-        } finally {
-            lock.writeLock().unlock();
-        }
-
+        reconnectListeners.remove(listener);
     }
 
     void startKeepAlive(long keepaliveInterval) {
@@ -523,19 +498,19 @@ public class ConnectionImpl extends RequestServiceRegistry
         if (connection != null) {
             boolean wasActive = inputActiveIndicator.getAndSet(false);
             if (wasActive) {
-                keepaliveCount = INITIAL_KEEPALIVE_COUNT;
+                keepaliveCount.set(INITIAL_KEEPALIVE_COUNT);
                 performRequest(keepaliveRequest);
                 if (reconnector.isDebug())
                     System.out.println(new Date() + " " + toString() + ": inputActiveIndicator was true, reset keepalive counter to " + INITIAL_KEEPALIVE_COUNT);
             } else {
-                keepaliveCount--;
+                keepaliveCount.getAndDecrement();
                 if (reconnector.isDebug())
                     System.out.println(new Date() + " " + toString() + ": decrementing keepalive counter to " + keepaliveCount);
-                if (keepaliveCount <= 0) {
+                if (keepaliveCount.get() <= 0) {
                     if (reconnector.isDebug())
                         System.out.println(new Date() + " " + toString() + ": keepalive counter reaches 0, invalidating connection!");
                     if (reconnector.isEnabled()) {
-                        keepaliveCount = INITIAL_KEEPALIVE_COUNT;
+                        keepaliveCount.set(INITIAL_KEEPALIVE_COUNT);
                         reconnect();
                     } else
                         cancelAndNotify(new Exception("Keepalive Counter reaches 0!"), true);
@@ -552,59 +527,23 @@ public class ConnectionImpl extends RequestServiceRegistry
     }
 
     void increaseDuplicateLogSize(int extend) {
-        lock.writeLock().lock();
-        try {
-            duplicateLog.resize(duplicateLog.getMax() + extend);
-        } finally {
-            lock.writeLock().unlock();
-        }
-
+        duplicateLog.increaseSize(extend);
     }
 
     void decreaseDuplicateLogSize(int extend) {
-        lock.writeLock().lock();
-        try {
-            duplicateLog.resize(Math.max(500, duplicateLog.getMax() - extend));
-        } finally {
-            lock.writeLock().unlock();
-        }
-
+        duplicateLog.decreaseSize(extend, 500);
     }
 
     void addToDuplicateLog(Set rollbackLog) {
-        lock.writeLock().lock();
-        try {
-            duplicateLog.addAll(rollbackLog);
-        } finally {
-            lock.writeLock().unlock();
-        }
-
+        duplicateLog.addAll(rollbackLog);
     }
 
     boolean isDuplicate(String id) {
-        lock.writeLock().lock();
-        try {
-            boolean rc = false;
-            if (duplicateLog.contains(id)) {
-                rc = true;
-            } else {
-                duplicateLog.add(id);
-            }
-            return rc;
-        } finally {
-            lock.writeLock().unlock();
-        }
-
+        return duplicateLog.containsOrAdd(id);
     }
 
     void removeFromDuplicateLog(String id) {
-        lock.writeLock().lock();
-        try {
-            duplicateLog.remove(id);
-        } finally {
-            lock.writeLock().unlock();
-        }
-
+        duplicateLog.remove(id);
     }
 
     void addSession(Session session) {
@@ -869,7 +808,7 @@ public class ConnectionImpl extends RequestServiceRegistry
     public void performRequest(Request request) {
         int id = request.getConnectionId();
         RequestRetryValidator validator = request.getValidator();
-        if (id != -1 && id != connectionId && validator != null) {
+        if (id != -1 && id != connectionId.get() && validator != null) {
             try {
                 validator.validate(request);
             } catch (ValidationException e) {
@@ -901,13 +840,13 @@ public class ConnectionImpl extends RequestServiceRegistry
                 requestRegistry.setReply((Reply) obj);
             } else if (obj instanceof Request) {
                 Request req = (Request) obj;
-                req.setConnectionId(connectionId);
+                req.setConnectionId(connectionId.get());
                 dispatch(req);
             } else {
                 // unknown class
             }
         } else {
-            keepaliveCount = INITIAL_KEEPALIVE_COUNT;
+            keepaliveCount.set(INITIAL_KEEPALIVE_COUNT);
             if (reconnector.isDebug())
                 System.out.println(new Date() + " " + toString() + ": setting keepalive counter to " + keepaliveCount);
         }

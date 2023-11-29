@@ -77,7 +77,7 @@ public abstract class Reconnector {
     protected abstract Connection createConnection(ServerEntry entry, Map parameters);
 
     public Connection getConnection() {
-        lock.readLock().lock();
+        lock.writeLock().lock();
         try {
             if (debug) System.out.println(dbg() + ", getConnection ...");
             int nRetries = -1;
@@ -106,7 +106,7 @@ public abstract class Reconnector {
             if (debug) System.out.println(dbg() + ", getConnection returns " + active);
             return active;
         } finally {
-            lock.readLock().unlock();
+            lock.writeLock().unlock();
         }
 
     }
