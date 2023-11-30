@@ -30,15 +30,16 @@ public class OrderedSet {
         }
     }
 
-    public void add(Object o) {
+    public boolean add(Object o) {
         if (!set.add(o)) {
-            return; // Already in the set, exit method
+            return true; // Already in the set, exit method
         }
 
         if (set.size() > max) {
             Object first = set.iterator().next();
             set.remove(first);
         }
+        return false;
     }
     public void addAll(Collection<Object> c) {
         for (Object o : c)
@@ -51,15 +52,6 @@ public class OrderedSet {
 
     public boolean contains(Object o) {
         return set.contains(o);
-    }
-
-    public boolean containsOrAdd(String id) {
-        if (set.contains(id)) {
-            return true;
-        } else {
-            add(id);
-            return false;
-        }
     }
 
     public int size() {

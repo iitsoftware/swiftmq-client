@@ -37,25 +37,20 @@ public class UninterruptableWaiter {
             boolean wasInterrupted = Thread.interrupted();
             while (!signalled) {
                 try {
-                    System.out.println("doWait() ...");
                     condition.await();
-                    System.out.println("doWait() woke up");
                     if (signalled) {
                         break; // Exit loop if signalled
                     }
                 } catch (InterruptedException e) {
                     wasInterrupted = true;
-                    System.out.println("doWait() interrupted");
                     // Continue waiting - do not exit loop
                 }
             }
             if (wasInterrupted) {
                 Thread.currentThread().interrupt(); // Restore interruption status
-                System.out.println("doWait() restoring interrupted status");
             }
         } finally {
             signalled = false; // Reset signal flag
-            System.out.println("doWait() exiting");
             lock.unlock();
         }
     }
@@ -71,22 +66,17 @@ public class UninterruptableWaiter {
             long nanos = TimeUnit.MILLISECONDS.toNanos(timeout);
             while (!signalled && nanos > 0L) {
                 try {
-                    System.out.println("doWait(" + TimeUnit.NANOSECONDS.toMillis(nanos) + ") ...");
                     nanos = condition.awaitNanos(nanos);
-                    System.out.println("doWait(" + TimeUnit.NANOSECONDS.toMillis(nanos) + ") woke up");
                 } catch (InterruptedException e) {
                     wasInterrupted = true;
-                    System.out.println("doWait(" + TimeUnit.NANOSECONDS.toMillis(nanos) + ") interrupted");
                     // Continue waiting - do not exit loop
                 }
             }
             if (wasInterrupted) {
                 Thread.currentThread().interrupt(); // Restore interruption status
-                System.out.println("doWait(" + TimeUnit.NANOSECONDS.toMillis(nanos) + ") restoring interrupted status");
             }
         } finally {
             signalled = false; // Reset signal flag
-            System.out.println("doWait(" + timeout + ") exiting");
             lock.unlock();
         }
     }
@@ -95,7 +85,6 @@ public class UninterruptableWaiter {
         lock.lock();
         try {
             signalled = true;
-            System.out.println("signal()");
             condition.signal();
         } finally {
             lock.unlock();
@@ -106,7 +95,6 @@ public class UninterruptableWaiter {
         lock.lock();
         try {
             signalled = true;
-            System.out.println("signalAll()");
             condition.signalAll();
         } finally {
             lock.unlock();

@@ -170,7 +170,7 @@ public class MessageConsumerImpl implements MessageConsumer, SwiftMQMessageConsu
         fillCacheLock.lock();
         try {
             if (isClosed() || fillCachePending.get() && !force)
-            return;
+                return;
             fillCachePending.set(true);
             consumerStarted.set(true);
             requestRegistry.request(new StartConsumerRequest(this, mySession.dispatchId, serverQueueConsumerId,

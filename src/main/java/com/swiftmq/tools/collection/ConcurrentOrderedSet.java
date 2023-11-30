@@ -11,14 +11,15 @@ public class ConcurrentOrderedSet extends OrderedSet {
     }
 
     @Override
-    public void add(Object o) {
+    public boolean add(Object o) {
         lock.writeLock().lock();
         try {
-            super.add(o);
+            return super.add(o);
         } finally {
             lock.writeLock().unlock();
         }
     }
+
     @Override
     public void addAll(Collection<Object> c) {
         lock.writeLock().lock();
@@ -46,15 +47,6 @@ public class ConcurrentOrderedSet extends OrderedSet {
             return super.contains(o);
         } finally {
             lock.readLock().unlock();
-        }
-    }
-
-    public boolean containsOrAdd(String id) {
-        lock.writeLock().lock();
-        try {
-            return super.containsOrAdd(id);
-        } finally {
-            lock.writeLock().unlock();
         }
     }
 

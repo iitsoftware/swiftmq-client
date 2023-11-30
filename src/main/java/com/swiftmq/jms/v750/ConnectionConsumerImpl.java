@@ -34,6 +34,7 @@ import javax.jms.ConnectionConsumer;
 import javax.jms.JMSException;
 import javax.jms.ServerSession;
 import javax.jms.ServerSessionPool;
+import java.util.Date;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -41,6 +42,7 @@ public abstract class ConnectionConsumerImpl
         implements ConnectionConsumer, RequestService, Recreatable, RequestRetryValidator {
     public static final String DISPATCH_TOKEN = "sys$jms.client.session.connectionconsumer.queuetask";
     private static final long CC_SS_DELAY = Long.parseLong(System.getProperty("swiftmq.cc.ss.delay", "100"));
+    static final boolean DEBUG = Boolean.valueOf(System.getProperty("swiftmq.reconnect.debug", "false")).booleanValue();
 
     String uniqueConsumerId = IdGenerator.getInstance().nextId('/');
     ConnectionImpl myConnection = null;
@@ -72,6 +74,7 @@ public abstract class ConnectionConsumerImpl
     }
 
     public void setResetInProgress(boolean resetInProgress) {
+        if (DEBUG) System.out.println(new Date() + " " + toString() + ", setResetInProgress=" + resetInProgress);
         this.resetInProgress = resetInProgress;
         if (resetInProgress) {
             deliveryQueue.stopQueue();
@@ -97,6 +100,7 @@ public abstract class ConnectionConsumerImpl
     }
 
     void fillCache() {
+        if (DEBUG) System.out.println(new Date() + " " + toString() + ", fillCache");
         requestRegistry.request(new StartConsumerRequest(this, dispatchId, 0, myDispatchId, 0, myConnection.getSmqpConsumerCacheSize(), myConnection.getSmqpConsumerCacheSizeKB()));
     }
 
@@ -134,17 +138,17 @@ public abstract class ConnectionConsumerImpl
     public void markInProgress(MessageImpl msg, String messageId) {
         if (!myConnection.isDuplicateMessageDetection())
             return;
-            if (messageId != null) {
-                messagesInProgress.add(messageId);
-            }
+        if (messageId != null) {
+            messagesInProgress.add(messageId);
+        }
     }
 
     public void unmarkInProgress(MessageImpl msg, String messageId) {
         if (!myConnection.isDuplicateMessageDetection())
             return;
-            if (messageId != null) {
-                messagesInProgress.remove(messageId);
-            }
+        if (messageId != null) {
+            messagesInProgress.remove(messageId);
+        }
     }
 
     private void checkInProgress(MessageImpl msg, String messageId) {
@@ -152,7 +156,7 @@ public abstract class ConnectionConsumerImpl
             return;
         boolean inProgress = false;
         do {
-                inProgress = messagesInProgress.contains(messageId);
+            inProgress = messagesInProgress.contains(messageId);
             if (inProgress) {
                 try {
                     Thread.sleep(CC_SS_DELAY);

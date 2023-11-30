@@ -236,9 +236,11 @@ public class SessionImpl
                 }
                 clearMessageChunks();
             } else {
+                if (DEBUG)
+                    System.out.println(new Date() + " " + toString() + ", setResetInProgress, c.size=" + consumerMap + ", recoveryInProgress=" + recoveryInProgress);
                 sessionQueue.clear();
-                for (Iterator iter = consumerMap.entrySet().iterator(); iter.hasNext(); ) {
-                    Map.Entry entry = (Map.Entry) iter.next();
+                for (Object o : consumerMap.entrySet()) {
+                    Map.Entry entry = (Map.Entry) o;
                     MessageConsumerImpl c = (MessageConsumerImpl) entry.getValue();
                     if (DEBUG)
                         System.out.println(new Date() + " " + toString() + ", setResetInProgress, c=" + c + ", recoveryInProgress=" + recoveryInProgress + ", started=" + c.isConsumerStarted() +

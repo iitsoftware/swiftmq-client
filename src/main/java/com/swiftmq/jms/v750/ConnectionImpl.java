@@ -155,6 +155,8 @@ public class ConnectionImpl extends RequestServiceRegistry
             if (!reset && connectionState == CONNECTED_STARTED)
                 session.startSession();
         }
+        if (reconnector.isDebug())
+            System.out.println(new Date() + " " + toString() + ": resetSessions, ccList=" + connectionConsumerList);
         for (int i = 0; i < connectionConsumerList.size(); i++) {
             ConnectionConsumerImpl cc = (ConnectionConsumerImpl) connectionConsumerList.get(i);
             cc.setResetInProgress(reset);
@@ -539,7 +541,7 @@ public class ConnectionImpl extends RequestServiceRegistry
     }
 
     boolean isDuplicate(String id) {
-        return duplicateLog.containsOrAdd(id);
+        return duplicateLog.add(id);
     }
 
     void removeFromDuplicateLog(String id) {
