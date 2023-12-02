@@ -14,9 +14,24 @@
  * limitations under the License.
  *
  */
+package com.swiftmq.tools.concurrent;
 
-package com.swiftmq.tools.file;
+import java.util.concurrent.atomic.AtomicReference;
 
-public interface RolloverSizeProvider {
-    long getRollOverSize();
+public class AtomicWrappingCounterLong {
+    private final AtomicReference<Long> counter;
+    private final long initialValue;
+
+    public AtomicWrappingCounterLong(long initialValue) {
+        this.initialValue = initialValue;
+        this.counter = new AtomicReference<>(initialValue);
+    }
+
+    public long getAndIncrement() {
+        return counter.getAndUpdate(current -> (current == Long.MAX_VALUE) ? initialValue : current + 1);
+    }
+
+    public void reset() {
+        counter.set(initialValue);
+    }
 }

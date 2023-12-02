@@ -95,7 +95,7 @@ public class SwiftMQConnectionFactory {
                     if (writer == null) {
                         writer = new GenerationalFileWriter(System.getProperty("swiftmq.client.debugtofile.directory", System.getProperty("user.dir")), System.getProperty("swiftmq.client.debugtofile.filename", "swiftmqclient"), new RolloverSizeProvider() {
                             public long getRollOverSize() {
-                                return Integer.parseInt(System.getProperty("swiftmq.client.debugtofile.rolloversizekb", "1024")) * 1024;
+                                return Integer.parseInt(System.getProperty("swiftmq.client.debugtofile.rolloversizekb", "1024")) * 1024L;
                             }
                         }, new NumberGenerationProvider() {
                             public int getNumberGenerations() {

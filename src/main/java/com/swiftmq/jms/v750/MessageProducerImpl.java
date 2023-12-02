@@ -22,6 +22,7 @@ import com.swiftmq.jms.smqp.v750.CloseProducerRequest;
 import com.swiftmq.jms.smqp.v750.ProduceMessageReply;
 import com.swiftmq.jms.smqp.v750.ProduceMessageRequest;
 import com.swiftmq.jms.smqp.v750.SMQPUtil;
+import com.swiftmq.tools.concurrent.AtomicWrappingCounterInteger;
 import com.swiftmq.tools.requestreply.*;
 import com.swiftmq.tools.util.DataByteArrayOutputStream;
 import com.swiftmq.tools.util.IdGenerator;
@@ -42,7 +43,7 @@ public class MessageProducerImpl implements MessageProducerExtended, RequestRetr
     int deliveryMode;
     int priority;
     long timeToLive;
-    int tsInc = 0;
+    AtomicWrappingCounterInteger tsInc = new AtomicWrappingCounterInteger(0);
     int nSend = 0;
     long currentDelay = 0;
     int replyThreshold = 0;
@@ -127,9 +128,7 @@ public class MessageProducerImpl implements MessageProducerExtended, RequestRetr
 
     private String nextId() {
         StringBuffer b = new StringBuffer(idPrefix);
-        b.append(tsInc++);
-        if (tsInc == Integer.MAX_VALUE)
-            tsInc = 0;
+        b.append(tsInc.getAndIncrement());
         return b.toString();
     }
 

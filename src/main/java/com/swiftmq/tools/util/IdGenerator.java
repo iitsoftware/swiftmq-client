@@ -17,12 +17,14 @@
 
 package com.swiftmq.tools.util;
 
+import com.swiftmq.tools.concurrent.AtomicWrappingCounterLong;
+
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class IdGenerator {
     final AtomicLong randomId = new AtomicLong();
-    final AtomicLong id = new AtomicLong();
+    final AtomicWrappingCounterLong id = new AtomicWrappingCounterLong(0);
 
     private IdGenerator() {
         Random random = new Random();
