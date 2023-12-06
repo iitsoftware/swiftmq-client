@@ -27,6 +27,10 @@ public class AtomicWrappingCounterLong {
         this.counter = new AtomicReference<>(initialValue);
     }
 
+    public long get() {
+        return counter.get();
+    }
+
     public long getAndIncrement() {
         return counter.getAndUpdate(current -> (current == Long.MAX_VALUE) ? initialValue : current + 1);
     }

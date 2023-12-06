@@ -27,6 +27,10 @@ public class AtomicWrappingCounterInteger {
         this.counter = new AtomicReference<>(initialValue);
     }
 
+    public int get() {
+        return counter.get();
+    }
+
     public int getAndIncrement() {
         return counter.getAndUpdate(current -> (current == Integer.MAX_VALUE) ? initialValue : current + 1);
     }
