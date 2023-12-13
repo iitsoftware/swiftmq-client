@@ -327,16 +327,15 @@ public class SwiftletManager {
                 if (swiftlet.getState() == Swiftlet.STATE_ACTIVE) {
                     al.add(swiftlet);
                 }
-                al.add(swiftletTable.get("sys$trace"));
             }
-            for (Swiftlet anAl : al) {
-                Swiftlet swiftlet = anAl;
+            al.add(swiftletTable.get("sys$trace"));
+            al.forEach(swiftlet -> {
                 try {
                     shutdownSwiftlet(swiftlet);
                 } catch (SwiftletException ignored) {
                 }
                 swiftlet.setStartupTime(-1);
-            }
+            });
         } finally {
             lock.writeLock().unlock();
         }
