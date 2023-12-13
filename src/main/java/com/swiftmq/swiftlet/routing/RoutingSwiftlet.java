@@ -20,11 +20,12 @@ package com.swiftmq.swiftlet.routing;
 import com.swiftmq.swiftlet.Swiftlet;
 import com.swiftmq.swiftlet.routing.event.RoutingEvent;
 import com.swiftmq.swiftlet.routing.event.RoutingListener;
+import com.swiftmq.tools.collection.ConcurrentList;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * The RoutingSwiftlet manages connections as well as message routing
@@ -34,7 +35,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 public abstract class RoutingSwiftlet extends Swiftlet {
     private final Map<String, Route> routingTable = new ConcurrentHashMap<>();
-    private final List<RoutingListener> listeners = new CopyOnWriteArrayList<>();
+    private final List<RoutingListener> listeners = new ConcurrentList<>(new ArrayList<>());
 
     public Route getRoute(String destination) {
         return routingTable.get(destination);

@@ -24,6 +24,7 @@ import com.swiftmq.mgmt.Command;
 import com.swiftmq.mgmt.CommandExecutor;
 import com.swiftmq.mgmt.CommandRegistry;
 import com.swiftmq.mgmt.TreeCommands;
+import com.swiftmq.tools.collection.ConcurrentList;
 import com.swiftmq.tools.concurrent.Semaphore;
 import com.swiftmq.tools.requestreply.RequestService;
 import com.swiftmq.util.SwiftUtilities;
@@ -41,7 +42,6 @@ import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * CLI is SwiftMQ's command line interface.
@@ -89,7 +89,7 @@ public class CLI implements ReconnectListener {
     boolean programmatic = false;
     Semaphore waitSem = new Semaphore();
     volatile String waitFor = null;
-    List<RouterListener> listeners = new CopyOnWriteArrayList<>();
+    List<RouterListener> listeners = new ConcurrentList<>(new ArrayList<>());
     Set<String> availableRouters = ConcurrentHashMap.newKeySet();
     CommandRegistry commandRegistry = new CommandRegistry("CLI shell", null);
     Endpoint actRouter = null;

@@ -19,9 +19,10 @@ package com.swiftmq.swiftlet.mgmt;
 
 import com.swiftmq.swiftlet.Swiftlet;
 import com.swiftmq.swiftlet.mgmt.event.MgmtListener;
+import com.swiftmq.tools.collection.ConcurrentList;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -30,7 +31,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @author IIT GmbH, Bremen/Germany, Copyright (c) 2000-2002, All Rights Reserved
  */
 public abstract class MgmtSwiftlet extends Swiftlet {
-    private final List<MgmtListener> listeners = new CopyOnWriteArrayList<>();
+    private final List<MgmtListener> listeners = new ConcurrentList<>(new ArrayList<>());
     private final AtomicBoolean active = new AtomicBoolean(false);
 
     /**
