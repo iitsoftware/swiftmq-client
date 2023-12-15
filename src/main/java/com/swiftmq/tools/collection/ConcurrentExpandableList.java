@@ -31,23 +31,13 @@ public class ConcurrentExpandableList<T> {
         lock.lock();
         try {
             // Find first null (free) index
-            int freeIndex = -1;
-            for (int i = 0; i < list.size(); i++) {
-                if (list.get(i) == null) {
-                    freeIndex = i;
-                    break;
-                }
-            }
-
-            // If found, replace null with new element and return index
-            if (freeIndex != -1) {
-                list.set(freeIndex, element);
-                return freeIndex;
-            } else {
-                // If not found, append to the end and return new index
+            int freeIndex = list.indexOf(null);
+            if (freeIndex == -1) {
+                freeIndex = list.size();
                 list.add(element);
-                return list.size() - 1; // index of newly added element
-            }
+            } else
+                list.set(freeIndex, element);
+            return freeIndex;
         } finally {
             lock.unlock();
         }
