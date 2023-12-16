@@ -16,75 +16,73 @@
  */
 package com.swiftmq.tools.collection;
 
-import java.util.ArrayList;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-public class ConcurrentExpandableList<T> {
-    private final ArrayList<T> list;
-    private final ReentrantLock lock = new ReentrantLock();
+public class ConcurrentExpandableList<T> extends ExpandableList<T> {
+    private final ReadWriteLock rwLock = new ReentrantReadWriteLock();
 
     public ConcurrentExpandableList() {
-        this.list = new ArrayList<>();
+        super();
     }
 
+    @Override
     public int add(T element) {
-        lock.lock();
+        rwLock.writeLock().lock();
         try {
-            // Find first null (free) index
-            int freeIndex = list.indexOf(null);
-            if (freeIndex == -1) {
-                freeIndex = list.size();
-                list.add(element);
-            } else
-                list.set(freeIndex, element);
-            return freeIndex;
+            return super.add(element);
         } finally {
-            lock.unlock();
+            rwLock.writeLock().unlock();
         }
     }
 
+    @Override
     public T get(int index) {
-        lock.lock();
+        rwLock.readLock().lock();
         try {
-            return list.get(index);
+            return super.get(index);
         } finally {
-            lock.unlock();
+            rwLock.readLock().unlock();
         }
     }
 
+    @Override
     public void remove(int index) {
-        lock.lock();
+        rwLock.writeLock().lock();
         try {
-            list.set(index, null); // Set to null to mark as free
+            super.remove(index);
         } finally {
-            lock.unlock();
+            rwLock.writeLock().unlock();
         }
     }
 
+    @Override
     public int indexOf(T element) {
-        lock.lock();
+        rwLock.readLock().lock();
         try {
-            return list.indexOf(element);
+            return super.indexOf(element);
         } finally {
-            lock.unlock();
+            rwLock.readLock().unlock();
         }
     }
 
+    @Override
     public int size() {
-        lock.lock();
+        rwLock.readLock().lock();
         try {
-            return list.size();
+            return super.size();
         } finally {
-            lock.unlock();
+            rwLock.readLock().unlock();
         }
     }
 
+    @Override
     public void clear() {
-        lock.lock();
+        rwLock.writeLock().lock();
         try {
-            list.clear();
+            super.clear();
         } finally {
-            lock.unlock();
+            rwLock.writeLock().unlock();
         }
     }
 }
