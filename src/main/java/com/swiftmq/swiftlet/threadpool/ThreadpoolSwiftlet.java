@@ -26,6 +26,17 @@ import com.swiftmq.swiftlet.Swiftlet;
  */
 public abstract class ThreadpoolSwiftlet extends Swiftlet {
     /**
+     * Create a new event loop that is assigned to a layer. This layer is used for freezing. All event loops
+     * of a layer must be frozen until switching to the next layer.
+     *
+     * @param layer     Name of the layer
+     * @param processor The processor that executes the tasks
+     * @param bulkMode  If true, the processor gets all available tasks at once, otherwise, one by one
+     * @return A new Event Loop
+     */
+    public abstract EventLoop createEventLoop(String layer, EventProcessor processor, boolean bulkMode);
+
+    /**
      * Returns all pool names.
      *
      * @return array of pool names.

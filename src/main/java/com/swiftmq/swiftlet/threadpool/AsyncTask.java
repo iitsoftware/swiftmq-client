@@ -34,7 +34,7 @@ public interface AsyncTask extends Runnable {
      *
      * @return true/false.
      */
-    public boolean isValid();
+    boolean isValid();
 
     /**
      * Returns the dispatch token of the task.
@@ -45,7 +45,7 @@ public interface AsyncTask extends Runnable {
      *
      * @return dispatch token.
      */
-    public String getDispatchToken();
+    String getDispatchToken();
 
     /**
      * Returns a short description of this task.
@@ -53,13 +53,13 @@ public interface AsyncTask extends Runnable {
      *
      * @return description.
      */
-    public String getDescription();
+    String getDescription();
 
     /**
      * Implements the task logic.
      * This method will be called when a task is executed from a pool thread.
      */
-    public void run();
+    void run();
 
     /**
      * Stops this task.
@@ -68,6 +68,6 @@ public interface AsyncTask extends Runnable {
      * does some clean up and returns 'false' on <code>isValid()</code> to
      * avoid execution.
      */
-    public void stop();
+    void stop();
 }
 

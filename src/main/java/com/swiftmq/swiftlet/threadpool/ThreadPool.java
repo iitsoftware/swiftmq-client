@@ -31,7 +31,7 @@ public interface ThreadPool {
      *
      * @return pool name.
      */
-    public String getPoolName();
+    String getPoolName();
 
     /**
      * Returns the number of currently idling threads.
@@ -39,7 +39,7 @@ public interface ThreadPool {
      *
      * @return number of idling threads.
      */
-    public int getNumberIdlingThreads();
+    int getNumberIdlingThreads();
 
     /**
      * Returns the number of currently running threads.
@@ -47,14 +47,14 @@ public interface ThreadPool {
      *
      * @return number of running threads.
      */
-    public int getNumberRunningThreads();
+    int getNumberRunningThreads();
 
     /**
      * Dispatch a task into the pool.
      *
      * @param asyncTask the task to dispatch.
      */
-    public void dispatchTask(AsyncTask asyncTask);
+    void dispatchTask(AsyncTask asyncTask);
 
     /**
      * Freezes this pool. That is, the current running tasks are completed but
@@ -64,23 +64,23 @@ public interface ThreadPool {
      *
      * @param listener will be called when the pool is freezed.
      */
-    public void freeze(FreezeCompletionListener listener);
+    void freeze(FreezeCompletionListener listener);
 
     /**
      * Unfreezes this pool.
      */
-    public void unfreeze();
+    void unfreeze();
 
     /**
      * Stops the pool.
      * Internal use only.
      */
-    public void stop();
+    void stop();
 
     /**
      * Closes the pool.
      * Internal use only.
      */
-    public void close();
+    void close();
 }
 
