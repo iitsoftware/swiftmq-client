@@ -19,15 +19,25 @@ package com.swiftmq.swiftlet.threadpool;
 
 import com.swiftmq.swiftlet.Swiftlet;
 
+import java.util.concurrent.CompletableFuture;
+
 /**
  * The ThreadpoolSwiftlet manages thread pools for a SwiftMQ router.
  *
  * @author IIT GmbH, Bremen/Germany, Copyright (c) 2000-2005, All Rights Reserved
  */
 public abstract class ThreadpoolSwiftlet extends Swiftlet {
+
     /**
-     * Create a new event loop that is assigned to a layer. This layer is used for freezing. All event loops
-     * of a layer must be frozen until switching to the next layer.
+     * Runs a Runnable in a separate thread.
+     *
+     * @param r Runnable
+     * @return Future to track completion
+     */
+    public abstract CompletableFuture<?> runAsync(Runnable r);
+
+    /**
+     * Create a new event loop that is assigned to a layer.
      *
      * @param layer     Name of the layer
      * @param processor The processor that executes the tasks
