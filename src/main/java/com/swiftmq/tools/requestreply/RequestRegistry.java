@@ -176,8 +176,7 @@ public class RequestRegistry implements TimerListener {
                             retrySem = null;
                         }
                     }
-                } else
-                    System.out.println(debugString + ": req == null! Reply=" + reply);
+                }
             } else
                 System.out.println(debugString + ": reqNumber >= requestList.size(), " + reqNumber + ":" + requestList.size());
             return sem;
@@ -194,16 +193,13 @@ public class RequestRegistry implements TimerListener {
         Semaphore sem = setReplySynchronized(reply);
         if (sem != null)
             sem.notifySingleWaiter();
-        else
-            System.out.println(debugString + ": sem == null! Reply=" + reply);
-
     }
 
     public void cancelAllRequests(TransportException exception, boolean valid) {
         lock.writeLock().lock();
         try {
             for (int i = 0; i < requestList.size(); i++) {
-                Request req = (Request) requestList.get(i);
+                Request req = requestList.get(i);
                 if (req != null) {
                     Reply reply = req.createReply();
                     reply.setOk(false);
@@ -253,7 +249,7 @@ public class RequestRegistry implements TimerListener {
                 }
             }
             requestList.clear();
-            if (retrySet.size() == 0) {
+            if (retrySet.isEmpty()) {
                 retrySem.notifySingleWaiter();
                 retrySem = null;
             }
