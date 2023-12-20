@@ -19,11 +19,10 @@ package com.swiftmq.client.thread;
 
 import com.swiftmq.swiftlet.threadpool.ThreadPool;
 
-import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
 public abstract class PoolManager {
-    private static final AtomicReference<PoolManager> _instance = new AtomicReference<>();
+    private static final AtomicReference<PoolManager> _instance = new AtomicReference<>(new DefaultPoolManager());
 
     protected PoolManager() {
     }
@@ -33,10 +32,6 @@ public abstract class PoolManager {
     }
 
     public static void setIntraVM(boolean intraVM) {
-        // Use compareAndSet for thread-safe lazy initialization
-        _instance.updateAndGet(currentInstance -> {
-            return Objects.requireNonNullElseGet(currentInstance, () -> intraVM ? new IntraVMPoolManager() : new DefaultPoolManager());
-        });
     }
 
     public static PoolManager getInstance() {
