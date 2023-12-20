@@ -37,13 +37,13 @@ public abstract class ThreadpoolSwiftlet extends Swiftlet {
     public abstract CompletableFuture<?> runAsync(Runnable r);
 
     /**
-     * Create a new event loop that is assigned to a layer.
+     * Create a new event loop.
      *
-     * @param layer     Name of the layer
+     * @param id     Id of the client
      * @param processor The processor that executes the tasks
      * @return A new Event Loop
      */
-    public abstract EventLoop createEventLoop(String layer, EventProcessor processor);
+    public abstract EventLoop createEventLoop(String id, EventProcessor processor);
 
     /**
      * Returns all pool names.
