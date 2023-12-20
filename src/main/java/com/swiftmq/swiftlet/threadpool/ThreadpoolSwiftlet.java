@@ -41,10 +41,9 @@ public abstract class ThreadpoolSwiftlet extends Swiftlet {
      *
      * @param layer     Name of the layer
      * @param processor The processor that executes the tasks
-     * @param bulkMode  If true, the processor gets all available tasks at once, otherwise, one by one
      * @return A new Event Loop
      */
-    public abstract EventLoop createEventLoop(String layer, EventProcessor processor, boolean bulkMode);
+    public abstract EventLoop createEventLoop(String layer, EventProcessor processor);
 
     /**
      * Returns all pool names.
