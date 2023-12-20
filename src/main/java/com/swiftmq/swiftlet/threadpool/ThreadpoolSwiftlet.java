@@ -29,20 +29,12 @@ import java.util.concurrent.CompletableFuture;
 public abstract class ThreadpoolSwiftlet extends Swiftlet {
 
     /**
-     * Runs a Runnable on a virtual thread.
+     * Runs a Runnable in a separate thread.
      *
      * @param r Runnable
      * @return Future to track completion
      */
-    public abstract CompletableFuture<?> runAsyncVirtual(Runnable r);
-
-    /**
-     * Runs a Runnable on a platform thread.
-     *
-     * @param r Runnable
-     * @return Future to track completion
-     */
-    public abstract CompletableFuture<?> runAsyncPlatform(Runnable r);
+    public abstract CompletableFuture<?> runAsync(Runnable r);
 
     /**
      * Create a new event loop that is assigned to a layer.
