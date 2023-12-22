@@ -22,7 +22,7 @@ import com.swiftmq.swiftlet.Swiftlet;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * The ThreadpoolSwiftlet manages thread pools for a SwiftMQ router.
+ * The ThreadpoolSwiftlet manages threads of a SwiftMQ router.
  *
  * @author IIT GmbH, Bremen/Germany, Copyright (c) 2000-2005, All Rights Reserved
  */
@@ -45,46 +45,5 @@ public abstract class ThreadpoolSwiftlet extends Swiftlet {
      */
     public abstract EventLoop createEventLoop(String id, EventProcessor processor);
 
-    /**
-     * Returns all pool names.
-     *
-     * @return array of pool names.
-     */
-    public abstract String[] getPoolnames();
-
-    /**
-     * Returns a pool by its name.
-     *
-     * @param poolName the pool name.
-     * @return a thread pool.
-     */
-    public abstract ThreadPool getPoolByName(String poolName);
-
-    /**
-     * Returns a pool for a given thread name.
-     * Thread names are assigned to pools in the router configuration
-     * file.
-     *
-     * @param threadName the thread name.
-     * @return a thread pool.
-     */
-    public abstract ThreadPool getPool(String threadName);
-
-    /**
-     * Dispatch a task to a pool.
-     * This method first determines the pool by the dispatch token of the task and
-     * then dispatches the task to the pool. This method is for convinience and
-     * should only be used for time-uncritical actions, e.g. if a task is dispatched only
-     * once to a pool. Otherwise, the preferred way is to use <code>getPool()</code>
-     * once and then dispatch the task directly into that pool.
-     *
-     * @param asyncTask the task to dispatch.
-     */
-    public abstract void dispatchTask(AsyncTask asyncTask);
-
-    /**
-     * Stops all pools
-     */
-    public abstract void stopPools();
 }
 
