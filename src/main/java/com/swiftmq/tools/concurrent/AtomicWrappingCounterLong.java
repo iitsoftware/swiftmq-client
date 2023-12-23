@@ -21,9 +21,14 @@ import java.util.concurrent.atomic.AtomicReference;
 public class AtomicWrappingCounterLong {
     private final AtomicReference<Long> counter;
     private final long initialValue;
-
+    private final long maxValue;
     public AtomicWrappingCounterLong(long initialValue) {
+        this(initialValue, Long.MAX_VALUE);
+    }
+
+    public AtomicWrappingCounterLong(long initialValue, long maxValue) {
         this.initialValue = initialValue;
+        this.maxValue = maxValue;
         this.counter = new AtomicReference<>(initialValue);
     }
 
@@ -32,7 +37,7 @@ public class AtomicWrappingCounterLong {
     }
 
     public long getAndIncrement() {
-        return counter.getAndUpdate(current -> (current == Long.MAX_VALUE) ? initialValue : current + 1);
+        return counter.getAndUpdate(current -> (current == maxValue) ? initialValue : current + 1);
     }
 
     public void reset() {
