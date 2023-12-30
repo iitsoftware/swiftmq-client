@@ -10,7 +10,7 @@ SwiftMQ Client is an open source (Apache 2) library that contains:
 
 ## Documentation
 
-Find the documentation [here](https://www.swiftmq.com/docs/docs/client/intro/).
+Find the documentation [here](https://docs.swiftmq.com).
 
 ## Obtain the Library
 
