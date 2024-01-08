@@ -63,6 +63,10 @@ public class OrderedSet {
             add(o);
     }
 
+    public Set<Object> getSet() {
+        return set;
+    }
+
     public boolean remove(Object o) {
         return set.remove(o);
     }
