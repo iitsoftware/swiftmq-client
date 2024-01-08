@@ -29,7 +29,7 @@ import java.util.concurrent.CompletableFuture;
 public abstract class ThreadpoolSwiftlet extends Swiftlet {
 
     /**
-     * Runs a Runnable in a separate thread.
+     * Executes a Runnable in a separate thread.
      *
      * @param r Runnable
      * @return Future to track completion
@@ -39,11 +39,25 @@ public abstract class ThreadpoolSwiftlet extends Swiftlet {
     /**
      * Create a new event loop.
      *
-     * @param id     Id of the client
+     * @param id     id of the client
      * @param processor The processor that executes the tasks
      * @return A new Event Loop
      */
     public abstract EventLoop createEventLoop(String id, EventProcessor processor);
+
+    /**
+     * Freeze all event loops and async thread pools.
+     *
+     * @return A future
+     */
+    public abstract CompletableFuture<Void> freeze();
+
+    /**
+     * Unfreeze all event loops and async thread pools.
+     *
+     * @return A future
+     */
+    public abstract CompletableFuture<Void> unfreeze();
 
 }
 
