@@ -50,14 +50,14 @@ public abstract class ThreadpoolSwiftlet extends Swiftlet {
      *
      * @return A future
      */
-    public abstract CompletableFuture<Void> freeze();
+    public abstract void freeze();
 
     /**
      * Unfreeze all event loops and async thread pools.
      *
      * @return A future
      */
-    public abstract CompletableFuture<Void> unfreeze();
+    public abstract void unfreeze();
 
 }
 
