@@ -196,7 +196,9 @@ public class PreConfigurator {
                 String op = getOp(changeElement);
                 if (configSwiftlet == null) {
                     if (op != null && op.equals("add")) {
-                        routerconfig.getRootElement().add(changeElement);
+                        Element copy = changeElement.createCopy();
+                        copy.remove(copy.attribute(OP));
+                        routerconfig.getRootElement().element("router").add(copy);
                     } else
                         throw new Exception("Swiftlet with name '" + name.getValue() + "' not found!");
                 } else
