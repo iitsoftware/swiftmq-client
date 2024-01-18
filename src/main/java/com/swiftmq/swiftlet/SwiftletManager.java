@@ -50,7 +50,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
@@ -95,7 +94,7 @@ public class SwiftletManager {
     static final String PROP_SHUTDOWN_HOOK = "swiftmq.shutdown.hook";
     static final String PROP_REUSE_KERNEL_CL = "swiftmq.reuse.kernel.classloader";
     static final long PROP_CONFIG_WATCHDOG_INTERVAL = Long.parseLong(System.getProperty("swiftmq.config.watchdog.interval", "0"));
-    protected static SwiftletManager _instance = null;
+    protected static final AtomicReference<SwiftletManager> _instance = new AtomicReference<>();
     static SimpleDateFormat fmt = new SimpleDateFormat(".yyyyMMddHHmmssSSS");
     final AtomicReference<String> configFilename = new AtomicReference<>();
     final AtomicReference<Document> routerConfig = new AtomicReference<>();
@@ -132,7 +131,6 @@ public class SwiftletManager {
     PrintStream savedSystemOut = System.out;
     Thread shutdownHook = null;
 
-    private static final ReentrantLock singletonLock = new ReentrantLock();
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
     protected SwiftletManager() {
@@ -144,14 +142,10 @@ public class SwiftletManager {
      * @return singleton instance
      */
     public static SwiftletManager getInstance() {
-        singletonLock.lock();
-        try {
-            if (_instance == null)
-                _instance = new SwiftletManager();
-            return _instance;
-        } finally {
-            singletonLock.unlock();
+        if (_instance.get() == null) {
+            _instance.compareAndSet(null, new SwiftletManager());
         }
+        return _instance.get();
     }
 
     public boolean isHA() {
