@@ -81,6 +81,11 @@ public class PreConfigurator {
         Element configSwiftlet = XMLUtilities.getSwiftletElement(name, root);
         if (configSwiftlet == null) {
             switch (name) {
+                case "sys$filecache":
+                    configSwiftlet = root.addElement("swiftlet");
+                    configSwiftlet.addAttribute("name", name);
+                    configSwiftlet.addElement("caches");
+                    break;
                 case "xt$amqpbridge":
                     configSwiftlet = root.addElement("swiftlet");
                     configSwiftlet.addAttribute("name", name);
@@ -193,27 +198,12 @@ public class PreConfigurator {
                 if (name == null)
                     throw new Exception("Missing 'name' attribute in 'swiftlet' element!");
                 Element configSwiftlet = getSwiftletElement(name.getValue());
-                String op = getOp(changeElement);
                 if (configSwiftlet == null) {
-                    if (op != null && op.equals("add")) {
-                        Element copy = changeElement.createCopy();
-                        copy.remove(copy.attribute(OP));
-                        routerconfig.getRootElement().add(copy);
-                    } else
-                        throw new Exception("Swiftlet with name '" + name.getValue() + "' not found!");
+                    throw new Exception("Swiftlet with name '" + name.getValue() + "' not found!");
                 } else
                     processElement(changeElement, configSwiftlet, false);
             } else {
-                Element haRouter = routerconfig.getRootElement().element("ha-router");
-                String op = getOp(changeElement);
-                if (haRouter == null) {
-                    if (op != null && op.equals("add")) {
-                        Element copy = changeElement.createCopy();
-                        copy.remove(copy.attribute(OP));
-                        routerconfig.getRootElement().add(copy);
-                    }
-                } else
-                    processElement(changeElement, haRouter, false);
+                processElement(changeElement, routerconfig.getRootElement().element("ha-router"), false);
             }
         }
         return routerconfig;
