@@ -221,21 +221,7 @@ public class SwiftletManager {
         }
     }
 
-    public static void printCurrentThreadStackTrace() {
-        // Get the current thread's stack trace
-        StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
-
-        // Print a header for clarity
-        System.out.println("Current thread's stack trace:");
-
-        // Iterate through the stack trace and print each element
-        for (StackTraceElement element : stackTrace) {
-            System.out.println(element);
-        }
-    }
-
     protected void shutdownSwiftlet(Swiftlet swiftlet) throws SwiftletException {
-        printCurrentThreadStackTrace();
         try {
             Configuration config = getConfiguration(swiftlet);
             System.out.println("... shutdown: " + config.getMetaData().getDisplayName());
