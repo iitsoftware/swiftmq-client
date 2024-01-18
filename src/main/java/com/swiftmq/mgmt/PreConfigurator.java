@@ -204,7 +204,13 @@ public class PreConfigurator {
                 } else
                     processElement(changeElement, configSwiftlet, false);
             } else {
-                processElement(changeElement, routerconfig.getRootElement().element("ha-router"), false);
+                String op = getOp(changeElement);
+                if (op != null && op.equals("add")) {
+                    Element copy = changeElement.createCopy();
+                    copy.remove(copy.attribute(OP));
+                    routerconfig.getRootElement().add(copy);
+                } else
+                    processElement(changeElement, routerconfig.getRootElement().element("ha-router"), false);
             }
         }
         return routerconfig;
