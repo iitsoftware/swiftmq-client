@@ -50,6 +50,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.LockSupport;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
@@ -129,7 +130,8 @@ public class SwiftletManager {
     final AtomicBoolean doFireKernelStartedEvent = new AtomicBoolean(true);
     final AtomicBoolean configDirty = new AtomicBoolean(false);
     PrintStream savedSystemOut = System.out;
-    Thread shutdownHook = null;
+    volatile Thread shutdownHook = null;
+    volatile Thread keepAliveThread = null;
 
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
@@ -146,6 +148,18 @@ public class SwiftletManager {
             _instance.compareAndSet(null, new SwiftletManager());
         }
         return _instance.get();
+    }
+
+    private void initializeKeepAliveThread() {
+        if (keepAliveThread == null) {
+            keepAliveThread = new Thread(() -> {
+                logSwiftlet.logInformation("SwiftletManager", "Keep-alive thread running.");
+                LockSupport.park(); // The thread waits here until it is unparked
+                logSwiftlet.logInformation("SwiftletManager", "Keep-alive thread terminating.");
+            });
+            keepAliveThread.setDaemon(false);
+            keepAliveThread.start();
+        }
     }
 
     public boolean isHA() {
@@ -272,6 +286,7 @@ public class SwiftletManager {
             // Create Extension Swiftlet Deployer
             if (!isHA())
                 startSwiftletDeployer();
+            initializeKeepAliveThread();
             saveConfigIfDirty();
         } catch (Exception e) {
             e.printStackTrace();
