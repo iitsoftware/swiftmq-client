@@ -382,7 +382,7 @@ public class XAResourceImpl implements XAResourceExtended, RequestRetryValidator
     }
 
     public int prepare(Xid xid) throws XAException {
-        lock.readLock().lock();
+        lock.writeLock().lock();
         try {
             if (logWriter != null) log(toString() + "/prepare, xid=" + xid);
             XidImpl sxid = toSwiftMQXid(xid);
@@ -409,7 +409,7 @@ public class XAResourceImpl implements XAResourceExtended, RequestRetryValidator
             XARecoverRegistry.getInstance().clear(sxid);
             return XA_OK;
         } finally {
-            lock.readLock().unlock();
+            lock.writeLock().unlock();
         }
 
     }
