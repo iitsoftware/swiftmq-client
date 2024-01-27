@@ -54,10 +54,10 @@ public abstract class ConnectionConsumerImpl
     QueueTask queueTask = null;
     ServerSessionPool serverSessionPool;
     int maxMessages = 0;
-    ServerSession currentServerSession = null;
-    SessionImpl currentSession = null;
-    int nCurrent = 0;
-    boolean closed = false;
+    volatile ServerSession currentServerSession = null;
+    volatile SessionImpl currentSession = null;
+    volatile int nCurrent = 0;
+    volatile boolean closed = false;
     volatile boolean resetInProgress = false;
     Set<String> messagesInProgress = ConcurrentHashMap.newKeySet();
 
@@ -243,7 +243,7 @@ public abstract class ConnectionConsumerImpl
     }
 
     private class DeliveryQueue extends SingleProcessorQueue {
-        boolean currentCallInvalid = false;
+        volatile boolean currentCallInvalid = false;
 
         public DeliveryQueue() {
             super(myConnection.smqpConsumerCacheSize);

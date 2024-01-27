@@ -69,7 +69,7 @@ public class SessionImpl
     Set currentTxLog = new HashSet();
     MessageListener messageListener = null;
     RingBuffer messageChunk = new RingBuffer(32);
-    boolean shadowConsumerCreated = false;
+    volatile boolean shadowConsumerCreated = false;
     MessageEntry lastMessage = null;
     boolean autoAssign = true;
     ThreadPool sessionPool = null;
@@ -81,17 +81,17 @@ public class SessionImpl
     boolean useThreadContextCL = false;
     volatile boolean resetInProgress = false;
     ConnectionConsumerImpl connectionConsumer = null;
-    String shadowConsumerQueueName = null;
+    volatile String shadowConsumerQueueName = null;
     List delayedClosedProducers = new ArrayList();
-    boolean withinOnMessage = false;
+    volatile boolean withinOnMessage = false;
     MessageImpl onMessageMessage = null;
     MessageConsumerImpl onMessageConsumer = null;
-    boolean isRunning = false;
+    volatile boolean isRunning = false;
     boolean xaMode = false;
     volatile int minConnectionId = Integer.MAX_VALUE;
     volatile boolean txCancelled = false;
     volatile Semaphore blockSem = null;
-    boolean consumerDirty = false;
+    volatile boolean consumerDirty = false;
     ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
     protected SessionImpl(int type, ConnectionImpl myConnection, boolean transacted, int acknowledgeMode, int dispatchId, RequestRegistry requestRegistry, String myHostname, String clientId) {
