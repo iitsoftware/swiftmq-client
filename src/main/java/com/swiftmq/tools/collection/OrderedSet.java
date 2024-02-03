@@ -31,14 +31,22 @@ public class OrderedSet {
 
     public void increaseSize(int extend) {
         this.max += extend;
+        System.out.println("increase size by " + extend + " to " + max);
     }
 
     public void decreaseSize(int reduce, int minSize) {
         this.max = Math.max(minSize, this.max - reduce);
-        this.resize(this.max);
+        this.reduceToSIze(this.max);
     }
 
     public void resize(int newSize) {
+        if (newSize > max)
+            max = newSize;
+        else if (newSize < max)
+            reduceToSIze(newSize);
+    }
+
+    private void reduceToSIze(int newSize) {
         Iterator<Object> iterator = set.iterator();
         while (set.size() > newSize && iterator.hasNext()) {
             iterator.next();

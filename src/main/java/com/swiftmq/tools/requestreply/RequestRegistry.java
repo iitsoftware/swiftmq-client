@@ -27,6 +27,7 @@ import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class RequestRegistry implements TimerListener {
@@ -36,9 +37,9 @@ public class RequestRegistry implements TimerListener {
     static boolean wrapPrivileged = false;
     ConcurrentExpandableList<Request> requestList = new ConcurrentExpandableList<>();
     RequestHandler requestHandler = null;
-    boolean valid = true;
-    boolean paused = false;
-    volatile boolean requestTimeoutEnabled = true;
+    final AtomicBoolean valid = new AtomicBoolean(true);
+    final AtomicBoolean paused = new AtomicBoolean(false);
+    final AtomicBoolean requestTimeoutEnabled = new AtomicBoolean(true);
     Semaphore retrySem = null;
     Set<Request> retrySet = ConcurrentHashMap.newKeySet();
     String debugString = null;
@@ -56,7 +57,7 @@ public class RequestRegistry implements TimerListener {
     }
 
     public void setRequestTimeoutEnabled(boolean requestTimeoutEnabled) {
-        this.requestTimeoutEnabled = requestTimeoutEnabled;
+        this.requestTimeoutEnabled.set(requestTimeoutEnabled);
         if (requestTimeoutEnabled)
             TimerRegistry.Singleton().addTimerListener(TIMEOUT_CHECKINTERVAL, this);
     }
@@ -64,7 +65,7 @@ public class RequestRegistry implements TimerListener {
     public void setPaused(boolean paused) {
         lock.writeLock().lock();
         try {
-            this.paused = paused;
+            this.paused.set(paused);
         } finally {
             lock.writeLock().unlock();
         }
@@ -137,23 +138,29 @@ public class RequestRegistry implements TimerListener {
     }
 
     private void processRequest(Request req) {
-        if (!valid)
-            throw new RuntimeException("Invalid request (connection might be closed already)");
+        lock.writeLock().lock();
+        try {
+            if (!valid.get())
+                throw new RuntimeException("Invalid request (connection might be closed already)");
 
-        req.setReply(null);
-        req.setDoRetry(false);
-        if (requestTimeoutEnabled)
-            req.setTimeout(System.currentTimeMillis() + SWIFTMQ_REQUEST_TIMEOUT);
+            req.setReply(null);
+            req.setDoRetry(false);
+            if (requestTimeoutEnabled.get())
+                req.setTimeout(System.currentTimeMillis() + SWIFTMQ_REQUEST_TIMEOUT);
 
-        // find next free index or add request to the end of the list
-        req.setRequestNumber(requestList.add(req));
+            // find next free index or add request to the end of the list
+            req.setRequestNumber(requestList.add(req));
 
-        // perform request via request handler
-        if (!paused)
-            requestHandler.performRequest(req);
-        else {
-            if (DEBUG) System.out.println(debugString + ": Paused, request NOT sent: " + req);
+            // perform request via request handler
+            if (!paused.get())
+                requestHandler.performRequest(req);
+            else {
+                if (DEBUG) System.out.println(debugString + ": Paused, request NOT sent: " + req);
+            }
+        } finally {
+            lock.writeLock().unlock();
         }
+
 
     }
 
@@ -214,7 +221,7 @@ public class RequestRegistry implements TimerListener {
                 retrySem.notifySingleWaiter();
                 retrySem = null;
             }
-            this.valid = valid;
+            this.valid.set(valid);
         } finally {
             lock.writeLock().unlock();
         }
@@ -290,7 +297,7 @@ public class RequestRegistry implements TimerListener {
         try {
             long actTime = System.currentTimeMillis();
             for (int i = 0; i < requestList.size(); i++) {
-                Request req = (Request) requestList.get(i);
+                Request req = requestList.get(i);
                 if (req != null && req.getTimeout() != -1 && req.getTimeout() < actTime) {
                     requestList.remove(i);
                     Reply reply = req.createReply();
@@ -308,11 +315,11 @@ public class RequestRegistry implements TimerListener {
     }
 
     public void close() {
-        if (requestTimeoutEnabled)
+        if (requestTimeoutEnabled.get())
             TimerRegistry.Singleton().removeTimerListener(TIMEOUT_CHECKINTERVAL, this);
     }
 
-    private class PrivilegedRequestHandler implements RequestHandler {
+    private static class PrivilegedRequestHandler implements RequestHandler {
         RequestHandler realHandler = null;
 
         public PrivilegedRequestHandler(RequestHandler realHandler) {
@@ -329,7 +336,7 @@ public class RequestRegistry implements TimerListener {
         }
     }
 
-    private abstract class PrivilegedRequestAction implements PrivilegedAction {
+    private abstract static class PrivilegedRequestAction implements PrivilegedAction {
         Request myRequest = null;
 
         public PrivilegedRequestAction(Request request) {
