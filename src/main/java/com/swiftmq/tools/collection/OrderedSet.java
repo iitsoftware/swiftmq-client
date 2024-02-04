@@ -31,7 +31,6 @@ public class OrderedSet {
 
     public void increaseSize(int extend) {
         this.max += extend;
-        System.out.println("increase size by " + extend + " to " + max);
     }
 
     public void decreaseSize(int reduce, int minSize) {
