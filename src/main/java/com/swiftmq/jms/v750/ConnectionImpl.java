@@ -149,25 +149,22 @@ public class ConnectionImpl extends RequestServiceRegistry
     }
 
     private void resetSessions(boolean reset) {
-        for (int i = 0; i < sessionList.size(); i++) {
-            SessionImpl session = (SessionImpl) sessionList.get(i);
+        sessionList.forEach(s -> {
+            SessionImpl session = (SessionImpl) s;
             session.setResetInProgress(reset);
             if (!reset && connectionState == CONNECTED_STARTED)
                 session.startSession();
-        }
+        });
         if (reconnector.isDebug())
             System.out.println(new Date() + " " + toString() + ": resetSessions, ccList=" + connectionConsumerList);
-        for (int i = 0; i < connectionConsumerList.size(); i++) {
-            ConnectionConsumerImpl cc = (ConnectionConsumerImpl) connectionConsumerList.get(i);
+        connectionConsumerList.forEach(c -> {
+            ConnectionConsumerImpl cc = (ConnectionConsumerImpl) c;
             cc.setResetInProgress(reset);
-        }
+        });
     }
 
     private void setSessionBlockState(boolean blocked) {
-        for (int i = 0; i < sessionList.size(); i++) {
-            SessionImpl session = (SessionImpl) sessionList.get(i);
-            session.setBlocked(blocked);
-        }
+        sessionList.forEach(session -> ((SessionImpl) session).setBlocked(blocked));
     }
 
     private void reconnect() {
@@ -300,12 +297,8 @@ public class ConnectionImpl extends RequestServiceRegistry
         for (Iterator iter = tmpQueues.entrySet().iterator(); iter.hasNext(); ) {
             list.add(new TemporaryQueueRecreator(this, (QueueImpl) ((Map.Entry) iter.next()).getValue()));
         }
-        for (int i = 0; i < sessionList.size(); i++) {
-            list.add(sessionList.get(i));
-        }
-        for (int i = 0; i < connectionConsumerList.size(); i++) {
-            list.add(connectionConsumerList.get(i));
-        }
+        sessionList.forEach(s -> list.add(s));
+        connectionConsumerList.forEach(c -> list.add(c));
         return list;
     }
 
@@ -892,12 +885,8 @@ public class ConnectionImpl extends RequestServiceRegistry
             clientIdAllowed = false;
 
             if (connectionState == CONNECTED_STOPPED) {
-                for (int i = 0; i < sessionList.size(); i++) {
-                    ((SessionImpl) sessionList.get(i)).startSession();
-                }
-                for (int i = 0; i < connectionConsumerList.size(); i++) {
-                    ((ConnectionConsumerImpl) connectionConsumerList.get(i)).startConsumer();
-                }
+                sessionList.forEach(s -> ((SessionImpl) s).startSession());
+                connectionConsumerList.forEach(c -> ((ConnectionConsumerImpl) c).startConsumer());
                 connectionState = CONNECTED_STARTED;
             } else if (connectionState == DISCONNECTED) {
                 throw new IllegalStateException("could not start - connection is disconnected!");
@@ -915,12 +904,8 @@ public class ConnectionImpl extends RequestServiceRegistry
             clientIdAllowed = false;
 
             if (connectionState == CONNECTED_STARTED) {
-                for (int i = 0; i < sessionList.size(); i++) {
-                    ((SessionImpl) sessionList.get(i)).stopSession();
-                }
-                for (int i = 0; i < connectionConsumerList.size(); i++) {
-                    ((ConnectionConsumerImpl) connectionConsumerList.get(i)).stopConsumer();
-                }
+                sessionList.forEach(s -> ((SessionImpl) s).stopSession());
+                connectionConsumerList.forEach(c -> ((ConnectionConsumerImpl) c).stopConsumer());
                 connectionState = CONNECTED_STOPPED;
             } else if (connectionState == DISCONNECTED) {
                 throw new IllegalStateException("could not stop - connection is disconnected!");
@@ -989,15 +974,9 @@ public class ConnectionImpl extends RequestServiceRegistry
                     connectionQueue.stopQueue();
                 cancelled = true;
                 closed = true;
-                for (int i = 0; i < sessionList.size(); i++) {
-                    SessionImpl session = (SessionImpl) sessionList.get(i);
-                    session.cancel();
-                }
+                sessionList.forEach(s -> ((SessionImpl) s).cancel());
+                connectionConsumerList.forEach(c -> ((ConnectionConsumerImpl) c).cancel());
                 sessionList.clear();
-                for (int i = 0; i < connectionConsumerList.size(); i++) {
-                    ConnectionConsumerImpl cc = (ConnectionConsumerImpl) connectionConsumerList.get(i);
-                    cc.cancel();
-                }
                 connectionConsumerList.clear();
                 TimerRegistry.Singleton().removeTimerListener(keepaliveInterval, this);
                 reconnector.invalidateConnection();
