@@ -39,10 +39,11 @@ import com.swiftmq.tools.util.DataByteArrayOutputStream;
 import com.swiftmq.util.SwiftUtilities;
 
 import java.net.InetAddress;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class EndpointImpl extends RequestServiceRegistry
         implements RequestHandler, TimerListener, MessageAvailabilityListener, Endpoint {
@@ -67,9 +68,10 @@ public class EndpointImpl extends RequestServiceRegistry
     boolean routeInfos = false;
     boolean subscriptionFilterEnabled = false;
     ConnectReply connectReply = null;
-    Map subscriptions = new HashMap();
+    Map<String, SubscriptionCounter> subscriptions = new ConcurrentHashMap<>();
     ExecutorService pollerService = Executors.newSingleThreadExecutor();
     Poller poller = null;
+    ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
     public EndpointImpl(Connection connection, Session session, Producer producer, Consumer consumer, AddressIF replyAddress, RequestService requestService, boolean createInternalCommands) throws Exception {
         this.connection = connection;
@@ -311,25 +313,31 @@ public class EndpointImpl extends RequestServiceRegistry
         return requestRegistry.request(request);
     }
 
-    public synchronized void performRequest(Request request) {
+    public void performRequest(Request request) {
+        lock.writeLock().lock();
         try {
-            dos.rewind();
-            Dumpalizer.dump(dos, request);
-            AMQPMessage msg = new AMQPMessage();
-            byte[] bytes = new byte[dos.getCount()];
-            System.arraycopy(dos.getBuffer(), 0, bytes, 0, bytes.length);
-            msg.addData(new Data(bytes));
-            Properties prop = new Properties();
-            if (connection.getUserName() == null)
-                prop.setUserId(new AMQPBinary("anonymous".getBytes()));
-            else
-                prop.setUserId(new AMQPBinary(connection.getUserName().getBytes()));
-            prop.setReplyTo(replyAddress);
-            msg.setProperties(prop);
-            producer.send(msg);
-        } catch (Exception e) {
-            close();
+            try {
+                dos.rewind();
+                Dumpalizer.dump(dos, request);
+                AMQPMessage msg = new AMQPMessage();
+                byte[] bytes = new byte[dos.getCount()];
+                System.arraycopy(dos.getBuffer(), 0, bytes, 0, bytes.length);
+                msg.addData(new Data(bytes));
+                Properties prop = new Properties();
+                if (connection.getUserName() == null)
+                    prop.setUserId(new AMQPBinary("anonymous".getBytes()));
+                else
+                    prop.setUserId(new AMQPBinary(connection.getUserName().getBytes()));
+                prop.setReplyTo(replyAddress);
+                msg.setProperties(prop);
+                producer.send(msg);
+            } catch (Exception e) {
+                close();
+            }
+        } finally {
+            lock.writeLock().unlock();
         }
+
     }
 
     public String[] execute(String[] context, Entity entity, String[] command) {

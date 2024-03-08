@@ -17,20 +17,25 @@
 
 package com.swiftmq.mgmt;
 
-public class RouterConfiguration {
-    private static RouterConfigInstance instance = null;
+import java.util.concurrent.atomic.AtomicReference;
 
-    public synchronized static RouterConfigInstance Singleton() {
-        if (instance == null)
-            instance = new RouterConfigInstance();
-        return (instance);
+public class RouterConfiguration {
+    private static final AtomicReference<RouterConfigInstance> instance = new AtomicReference<>();
+
+    public static RouterConfigInstance Singleton() {
+        // Use compareAndSet to atomically initialize the instance
+        instance.compareAndSet(null, new RouterConfigInstance());
+        return instance.get();
     }
 
-    public synchronized static void removeInstance() {
-        if (instance != null) {
-            instance.clearConfigurations();
-            instance = null;
-        }
+    public static void removeInstance() {
+        instance.updateAndGet(currentInstance -> {
+            if (currentInstance != null) {
+                currentInstance.clearConfigurations();
+                return null;
+            }
+            return currentInstance;
+        });
     }
 }
 

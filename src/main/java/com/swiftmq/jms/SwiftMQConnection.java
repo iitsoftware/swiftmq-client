@@ -29,4 +29,6 @@ public interface SwiftMQConnection {
     public void removeReconnectListener(ReconnectListener listener);
 
     public void deleteTempQueue(String queueName) throws JMSException;
+
+    void cancel(boolean closeReconnector);
 }

@@ -210,19 +210,7 @@ public class AMQPConnectionHolder implements ConnectionHolder {
                         if (pr.isOk()) {
                             endpoint = new com.swiftmq.amqp.v100.mgmt.v750.EndpointImpl(connection, session, sender, receiver, replyAddress, rsf.createRequestService(750), createInternalCommands);
                             endpoint.setSubscriptionFilterEnabled(true);
-                        } else {
-                            pr = (ProtocolReply) request(new ProtocolRequest(400));
-                            if (!pr.isOk())
-                                throw pr.getException();
-                            endpoint = new com.swiftmq.amqp.v100.mgmt.v400.EndpointImpl(connection, session, sender, receiver, replyAddress, rsf.createRequestService(400), createInternalCommands);
                         }
-                    }
-                    break;
-                    case 400: {
-                        ProtocolReply pr = (ProtocolReply) request(new ProtocolRequest(400));
-                        if (!pr.isOk())
-                            throw pr.getException();
-                        endpoint = new com.swiftmq.amqp.v100.mgmt.v400.EndpointImpl(connection, session, sender, receiver, replyAddress, rsf.createRequestService(400), createInternalCommands);
                     }
                     break;
                     default:

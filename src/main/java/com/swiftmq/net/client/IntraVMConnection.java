@@ -25,9 +25,10 @@ import com.swiftmq.tools.util.DataByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class IntraVMConnection implements Connection, ChunkListener {
-    static int connectionId = 0;
+    static AtomicInteger connectionId = new AtomicInteger(0);
 
     IntraVMServerEndpoint endpoint = null;
     InboundHandler inboundHandler = null;
@@ -52,8 +53,8 @@ public class IntraVMConnection implements Connection, ChunkListener {
         myHostname = "INTRAVM-" + getConnectionId();
     }
 
-    private static synchronized int getConnectionId() {
-        return connectionId++;
+    private static int getConnectionId() {
+        return connectionId.getAndIncrement();
     }
 
     public void setEndpoint(IntraVMServerEndpoint endpoint) {

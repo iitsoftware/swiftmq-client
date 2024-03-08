@@ -36,8 +36,9 @@ import com.swiftmq.tools.util.DataByteArrayOutputStream;
 import com.swiftmq.util.SwiftUtilities;
 
 import javax.jms.*;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class EndpointImpl extends RequestServiceRegistry
         implements RequestHandler, TimerListener, MessageListener, Endpoint, ReconnectListener {
@@ -64,7 +65,8 @@ public class EndpointImpl extends RequestServiceRegistry
     boolean routeInfos = false;
     boolean subscriptionFilterEnabled = false;
     ConnectReply connectReply = null;
-    Map subscriptions = new HashMap();
+    Map<String, SubscriptionCounter> subscriptions = new ConcurrentHashMap<>();
+    ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
     public EndpointImpl(QueueConnection connection, QueueSession senderSession, QueueSender sender, QueueSession receiverSession, QueueReceiver receiver, TemporaryQueue replyQueue, RequestService requestService, boolean createInternalCommands) throws Exception {
         this.connection = connection;
@@ -311,17 +313,23 @@ public class EndpointImpl extends RequestServiceRegistry
         return requestRegistry.request(request);
     }
 
-    public synchronized void performRequest(Request request) {
+    public void performRequest(Request request) {
+        lock.writeLock().lock();
         try {
-            dos.rewind();
-            Dumpalizer.dump(dos, request);
-            BytesMessageImpl msg = new BytesMessageImpl();
-            msg.writeBytes(dos.getBuffer(), 0, dos.getCount());
-            msg.setJMSReplyTo(replyQueue);
-            sender.send(msg);
-        } catch (Exception e) {
-            close();
+            try {
+                dos.rewind();
+                Dumpalizer.dump(dos, request);
+                BytesMessageImpl msg = new BytesMessageImpl();
+                msg.writeBytes(dos.getBuffer(), 0, dos.getCount());
+                msg.setJMSReplyTo(replyQueue);
+                sender.send(msg);
+            } catch (Exception e) {
+                close();
+            }
+        } finally {
+            lock.writeLock().unlock();
         }
+
     }
 
     public String[] execute(String[] context, Entity entity, String[] command) {

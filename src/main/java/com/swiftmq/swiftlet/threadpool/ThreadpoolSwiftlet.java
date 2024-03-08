@@ -19,52 +19,54 @@ package com.swiftmq.swiftlet.threadpool;
 
 import com.swiftmq.swiftlet.Swiftlet;
 
+import java.util.concurrent.CompletableFuture;
+
 /**
- * The ThreadpoolSwiftlet manages thread pools for a SwiftMQ router.
+ * The ThreadpoolSwiftlet manages threads of a SwiftMQ router.
  *
  * @author IIT GmbH, Bremen/Germany, Copyright (c) 2000-2005, All Rights Reserved
  */
 public abstract class ThreadpoolSwiftlet extends Swiftlet {
-    /**
-     * Returns all pool names.
-     *
-     * @return array of pool names.
-     */
-    public abstract String[] getPoolnames();
 
     /**
-     * Returns a pool by its name.
+     * Executes a Runnable in a separate virtual thread.
      *
-     * @param poolName the pool name.
-     * @return a thread pool.
+     * @param r Runnable
+     * @return Future to track completion
      */
-    public abstract ThreadPool getPoolByName(String poolName);
+    public abstract CompletableFuture<?> runAsync(Runnable r);
 
     /**
-     * Returns a pool for a given thread name.
-     * Thread names are assigned to pools in the router configuration
-     * file.
+     * Executes a Runnable in a separate virtual or platform thread.
      *
-     * @param threadName the thread name.
-     * @return a thread pool.
+     * @param r       Runnable
+     * @param virtual If true, uses a virtual, if false, uses a platform thread
+     * @return Future to track completion
      */
-    public abstract ThreadPool getPool(String threadName);
+    public abstract CompletableFuture<?> runAsync(Runnable r, boolean virtual);
 
     /**
-     * Dispatch a task to a pool.
-     * This method first determines the pool by the dispatch token of the task and
-     * then dispatches the task to the pool. This method is for convinience and
-     * should only be used for time-uncritical actions, e.g. if a task is dispatched only
-     * once to a pool. Otherwise, the preferred way is to use <code>getPool()</code>
-     * once and then dispatch the task directly into that pool.
+     * Create a new event loop.
      *
-     * @param asyncTask the task to dispatch.
+     * @param id     id of the client
+     * @param processor The processor that executes the tasks
+     * @return A new Event Loop
      */
-    public abstract void dispatchTask(AsyncTask asyncTask);
+    public abstract EventLoop createEventLoop(String id, EventProcessor processor);
 
     /**
-     * Stops all pools
+     * Freeze all event loops and async thread pools.
+     *
+     * @return A future
      */
-    public abstract void stopPools();
+    public abstract void freeze();
+
+    /**
+     * Unfreeze all event loops and async thread pools.
+     *
+     * @return A future
+     */
+    public abstract void unfreeze();
+
 }
 

@@ -19,8 +19,8 @@ package com.swiftmq.swiftlet.queue;
 
 import com.swiftmq.mgmt.EntityList;
 
-import java.util.Iterator;
 import java.util.SortedSet;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * A QueueBrowser is created by the QueueManager. It provides a method for
@@ -35,6 +35,7 @@ public class QueueBrowser extends QueueHandler {
     MessageIndex lastMessageIndex = null;
     EntityList browserEntityList = null;
     int viewId = -1;
+    ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
     /**
      * Creates a new QueueBrowser
@@ -50,7 +51,13 @@ public class QueueBrowser extends QueueHandler {
     }
 
     public void setLastMessageIndex(MessageIndex lastMessageIndex) {
-        this.lastMessageIndex = lastMessageIndex;
+        lock.writeLock().lock();
+        try {
+            this.lastMessageIndex = lastMessageIndex;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     private MessageIndex getNextEntry(MessageIndex storeId) {
@@ -59,9 +66,8 @@ public class QueueBrowser extends QueueHandler {
             if (queueIndex.size() > 0)
                 rMessageIndex = (MessageIndex) queueIndex.first();
         } else {
-            Iterator iterator = queueIndex.iterator();
-            while (iterator.hasNext()) {
-                MessageIndex s = (MessageIndex) iterator.next();
+            for (Object index : queueIndex) {
+                MessageIndex s = (MessageIndex) index;
                 if (s.compareTo(storeId) > 0) {
                     rMessageIndex = s;
                     break;
@@ -77,10 +83,16 @@ public class QueueBrowser extends QueueHandler {
      * It will start at the beginning next time a message is fetched.
      */
     public void resetBrowser() {
-        queueIndex = null;
-        lastMessageIndex = null;
-        if (viewId != -1)
-            abstractQueue.deleteView(viewId);
+        lock.writeLock().lock();
+        try {
+            queueIndex = null;
+            lastMessageIndex = null;
+            if (viewId != -1)
+                abstractQueue.deleteView(viewId);
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     /**
@@ -90,33 +102,39 @@ public class QueueBrowser extends QueueHandler {
      * @throws QueueException              thrown by the queue
      * @throws QueueHandlerClosedException if the handler is closed
      */
-    public synchronized MessageEntry getNextMessage()
+    public MessageEntry getNextMessage()
             throws QueueException, QueueHandlerClosedException {
-        verifyQueueHandlerState();
-        MessageEntry me = null;
-        if (queueIndex == null) {
-            if (selector == null)
-                queueIndex = abstractQueue.getQueueIndex();
-            else {
-                viewId = abstractQueue.createView(selector);
-                queueIndex = abstractQueue.getQueueIndex(viewId);
-            }
-        }
-        boolean found = false;
-        while (!found) {
-            MessageIndex s = getNextEntry(lastMessageIndex);
-            if (s == null)
-                found = true;
-            else {
-                lastMessageIndex = s;
-                MessageEntry m = abstractQueue.getMessageByIndex(s);
-                if (m != null) {
-                    me = m;
-                    found = true;
+        lock.writeLock().lock();
+        try {
+            verifyQueueHandlerState();
+            MessageEntry me = null;
+            if (queueIndex == null) {
+                if (selector == null)
+                    queueIndex = abstractQueue.getQueueIndex();
+                else {
+                    viewId = abstractQueue.createView(selector);
+                    queueIndex = abstractQueue.getQueueIndex(viewId);
                 }
             }
+            boolean found = false;
+            while (!found) {
+                MessageIndex s = getNextEntry(lastMessageIndex);
+                if (s == null)
+                    found = true;
+                else {
+                    lastMessageIndex = s;
+                    MessageEntry m = abstractQueue.getMessageByIndex(s);
+                    if (m != null) {
+                        me = m;
+                        found = true;
+                    }
+                }
+            }
+            return me;
+        } finally {
+            lock.writeLock().unlock();
         }
-        return me;
+
     }
 
     /**
@@ -127,15 +145,21 @@ public class QueueBrowser extends QueueHandler {
      */
     public void close()
             throws QueueException, QueueHandlerClosedException {
-        super.close();
-        if (browserEntityList != null) {
-            browserEntityList.removeDynamicEntity(this);
-            browserEntityList = null;
+        lock.writeLock().lock();
+        try {
+            super.close();
+            if (browserEntityList != null) {
+                browserEntityList.removeDynamicEntity(this);
+                browserEntityList = null;
+            }
+            queueIndex = null;
+            lastMessageIndex = null;
+            if (viewId != -1)
+                abstractQueue.deleteView(viewId);
+        } finally {
+            lock.writeLock().unlock();
         }
-        queueIndex = null;
-        lastMessageIndex = null;
-        if (viewId != -1)
-            abstractQueue.deleteView(viewId);
+
     }
 }
 

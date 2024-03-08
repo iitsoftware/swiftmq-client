@@ -20,6 +20,8 @@ package com.swiftmq.client.thread;
 import com.swiftmq.swiftlet.threadpool.ThreadPool;
 import com.swiftmq.tools.prop.SystemProperties;
 
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+
 public class DefaultPoolManager extends PoolManager {
     public static final String PROP_CONNECTOR_POOL_MIN_THREADS = "swiftmq.pool.connector.threads.min";
     public static final String PROP_CONNECTOR_POOL_MAX_THREADS = "swiftmq.pool.connector.threads.max";
@@ -44,42 +46,62 @@ public class DefaultPoolManager extends PoolManager {
     ThreadPool sessionPool = null;
     ThreadPool connectorPool = null;
 
-    public synchronized ThreadPool getConnectionPool() {
-        if (connectionPool == null) {
-            int min = Integer.parseInt(SystemProperties.get(PROP_CONN_POOL_MIN_THREADS, "5"));
-            int max = Integer.parseInt(SystemProperties.get(PROP_CONN_POOL_MAX_THREADS, "50"));
-            int len = Integer.parseInt(SystemProperties.get(PROP_CONN_POOL_QUEUE_LEN, "1"));
-            int add = Integer.parseInt(SystemProperties.get(PROP_CONN_POOL_THREADS_ADD, "1"));
-            int prio = Integer.parseInt(SystemProperties.get(PROP_CONN_POOL_PRIO, String.valueOf(Thread.NORM_PRIORITY)));
-            long timeout = Long.parseLong(SystemProperties.get(PROP_CONN_POOL_IDLE_TIMEOUT, "120000"));
-            connectionPool = new ThreadPoolImpl("ConnectionPool", true, min, max, len, add, prio, timeout);
+    ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+
+    public ThreadPool getConnectionPool() {
+        lock.writeLock().lock();
+        try {
+            if (connectionPool == null) {
+                int min = Integer.parseInt(SystemProperties.get(PROP_CONN_POOL_MIN_THREADS, "5"));
+                int max = Integer.parseInt(SystemProperties.get(PROP_CONN_POOL_MAX_THREADS, "50"));
+                int len = Integer.parseInt(SystemProperties.get(PROP_CONN_POOL_QUEUE_LEN, "1"));
+                int add = Integer.parseInt(SystemProperties.get(PROP_CONN_POOL_THREADS_ADD, "1"));
+                int prio = Integer.parseInt(SystemProperties.get(PROP_CONN_POOL_PRIO, String.valueOf(Thread.NORM_PRIORITY)));
+                long timeout = Long.parseLong(SystemProperties.get(PROP_CONN_POOL_IDLE_TIMEOUT, "120000"));
+                connectionPool = new ThreadPoolImpl("ConnectionPool", true, min, max, len, add, prio, timeout);
+            }
+            return connectionPool;
+        } finally {
+            lock.writeLock().unlock();
         }
-        return connectionPool;
+
     }
 
-    public synchronized ThreadPool getSessionPool() {
-        if (sessionPool == null) {
-            int min = Integer.parseInt(SystemProperties.get(PROP_SESSION_POOL_MIN_THREADS, "5"));
-            int max = Integer.parseInt(SystemProperties.get(PROP_SESSION_POOL_MAX_THREADS, "50"));
-            int len = Integer.parseInt(SystemProperties.get(PROP_SESSION_POOL_QUEUE_LEN, "1"));
-            int add = Integer.parseInt(SystemProperties.get(PROP_SESSION_POOL_THREADS_ADD, "1"));
-            int prio = Integer.parseInt(SystemProperties.get(PROP_SESSION_POOL_PRIO, String.valueOf(Thread.NORM_PRIORITY)));
-            long timeout = Long.parseLong(SystemProperties.get(PROP_SESSION_POOL_IDLE_TIMEOUT, "120000"));
-            sessionPool = new ThreadPoolImpl("SessionPool", true, min, max, len, add, prio, timeout);
+    public ThreadPool getSessionPool() {
+        lock.writeLock().lock();
+        try {
+            if (sessionPool == null) {
+                int min = Integer.parseInt(SystemProperties.get(PROP_SESSION_POOL_MIN_THREADS, "5"));
+                int max = Integer.parseInt(SystemProperties.get(PROP_SESSION_POOL_MAX_THREADS, "50"));
+                int len = Integer.parseInt(SystemProperties.get(PROP_SESSION_POOL_QUEUE_LEN, "1"));
+                int add = Integer.parseInt(SystemProperties.get(PROP_SESSION_POOL_THREADS_ADD, "1"));
+                int prio = Integer.parseInt(SystemProperties.get(PROP_SESSION_POOL_PRIO, String.valueOf(Thread.NORM_PRIORITY)));
+                long timeout = Long.parseLong(SystemProperties.get(PROP_SESSION_POOL_IDLE_TIMEOUT, "120000"));
+                sessionPool = new ThreadPoolImpl("SessionPool", true, min, max, len, add, prio, timeout);
+            }
+            return sessionPool;
+        } finally {
+            lock.writeLock().unlock();
         }
-        return sessionPool;
+
     }
 
-    public synchronized ThreadPool getConnectorPool() {
-        if (connectorPool == null) {
-            int min = Integer.parseInt(SystemProperties.get(PROP_CONNECTOR_POOL_MIN_THREADS, "1"));
-            int max = Integer.parseInt(SystemProperties.get(PROP_CONNECTOR_POOL_MAX_THREADS, "10"));
-            int len = Integer.parseInt(SystemProperties.get(PROP_CONNECTOR_POOL_QUEUE_LEN, "1"));
-            int add = Integer.parseInt(SystemProperties.get(PROP_CONNECTOR_POOL_THREADS_ADD, "1"));
-            int prio = Integer.parseInt(SystemProperties.get(PROP_CONNECTOR_POOL_PRIO, String.valueOf(Thread.NORM_PRIORITY)));
-            long timeout = Long.parseLong(SystemProperties.get(PROP_CONNECTOR_POOL_IDLE_TIMEOUT, "120000"));
-            connectorPool = new ThreadPoolImpl("ConnectorPool", true, min, max, len, add, prio, timeout);
+    public ThreadPool getConnectorPool() {
+        lock.writeLock().lock();
+        try {
+            if (connectorPool == null) {
+                int min = Integer.parseInt(SystemProperties.get(PROP_CONNECTOR_POOL_MIN_THREADS, "1"));
+                int max = Integer.parseInt(SystemProperties.get(PROP_CONNECTOR_POOL_MAX_THREADS, "10"));
+                int len = Integer.parseInt(SystemProperties.get(PROP_CONNECTOR_POOL_QUEUE_LEN, "1"));
+                int add = Integer.parseInt(SystemProperties.get(PROP_CONNECTOR_POOL_THREADS_ADD, "1"));
+                int prio = Integer.parseInt(SystemProperties.get(PROP_CONNECTOR_POOL_PRIO, String.valueOf(Thread.NORM_PRIORITY)));
+                long timeout = Long.parseLong(SystemProperties.get(PROP_CONNECTOR_POOL_IDLE_TIMEOUT, "120000"));
+                connectorPool = new ThreadPoolImpl("ConnectorPool", true, min, max, len, add, prio, timeout);
+            }
+            return connectorPool;
+        } finally {
+            lock.writeLock().unlock();
         }
-        return connectorPool;
+
     }
 }

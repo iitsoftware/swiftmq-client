@@ -26,8 +26,8 @@ import com.swiftmq.swiftlet.timer.TimerSwiftlet;
 import com.swiftmq.swiftlet.timer.event.TimerListener;
 
 public class RouterMemoryMeter implements TimerListener, MgmtListener {
-    TimerSwiftlet timerSwiftlet = null;
-    MgmtSwiftlet mgmtSwiftlet = null;
+    volatile TimerSwiftlet timerSwiftlet = null;
+    volatile MgmtSwiftlet mgmtSwiftlet = null;
     EntityList memoryList = null;
     Property freeMemProp = null;
     Property totalMemProp = null;
@@ -47,7 +47,7 @@ public class RouterMemoryMeter implements TimerListener, MgmtListener {
         });
     }
 
-    private synchronized void timerChange() {
+    private void timerChange() {
         if (collectActive) {
             timerSwiftlet.removeTimerListener(this);
             timerSwiftlet.addTimerListener(collectInterval, this);
@@ -103,7 +103,7 @@ public class RouterMemoryMeter implements TimerListener, MgmtListener {
         return memoryList;
     }
 
-    public synchronized void start() {
+    public void start() {
         timerSwiftlet = (TimerSwiftlet) SwiftletManager.getInstance().getSwiftlet("sys$timer");
         mgmtSwiftlet = (MgmtSwiftlet) SwiftletManager.getInstance().getSwiftlet("sys$mgmt");
         if (mgmtSwiftlet != null)
@@ -118,12 +118,12 @@ public class RouterMemoryMeter implements TimerListener, MgmtListener {
         }
     }
 
-    public synchronized void adminToolActivated() {
+    public void adminToolActivated() {
         timerSwiftlet.addTimerListener(collectInterval, this);
         collectActive = true;
     }
 
-    public synchronized void adminToolDeactivated() {
+    public void adminToolDeactivated() {
         timerSwiftlet.removeTimerListener(this);
         collectActive = false;
     }
@@ -137,7 +137,7 @@ public class RouterMemoryMeter implements TimerListener, MgmtListener {
         }
     }
 
-    public synchronized void close() {
+    public void close() {
         if (collectActive)
             timerSwiftlet.removeTimerListener(this);
         if (mgmtSwiftlet != null)

@@ -29,16 +29,16 @@ import com.swiftmq.tools.collection.RingBuffer;
 import com.swiftmq.tools.concurrent.Semaphore;
 import com.swiftmq.tools.queue.SingleProcessorQueue;
 import com.swiftmq.tools.requestreply.*;
-import com.swiftmq.tools.tracking.MessageTracker;
 import com.swiftmq.util.SwiftUtilities;
 
-import javax.jms.*;
 import javax.jms.IllegalStateException;
 import javax.jms.Queue;
+import javax.jms.*;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.Serializable;
 import java.util.*;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class SessionImpl
         implements Session, RequestService, QueueSession, TopicSession, SwiftMQSession, SessionExtended, Recreatable, RequestRetryValidator {
@@ -69,7 +69,7 @@ public class SessionImpl
     Set currentTxLog = new HashSet();
     MessageListener messageListener = null;
     RingBuffer messageChunk = new RingBuffer(32);
-    boolean shadowConsumerCreated = false;
+    volatile boolean shadowConsumerCreated = false;
     MessageEntry lastMessage = null;
     boolean autoAssign = true;
     ThreadPool sessionPool = null;
@@ -81,17 +81,18 @@ public class SessionImpl
     boolean useThreadContextCL = false;
     volatile boolean resetInProgress = false;
     ConnectionConsumerImpl connectionConsumer = null;
-    String shadowConsumerQueueName = null;
+    volatile String shadowConsumerQueueName = null;
     List delayedClosedProducers = new ArrayList();
-    boolean withinOnMessage = false;
+    volatile boolean withinOnMessage = false;
     MessageImpl onMessageMessage = null;
     MessageConsumerImpl onMessageConsumer = null;
-    boolean isRunning = false;
+    volatile boolean isRunning = false;
     boolean xaMode = false;
     volatile int minConnectionId = Integer.MAX_VALUE;
     volatile boolean txCancelled = false;
     volatile Semaphore blockSem = null;
-    boolean consumerDirty = false;
+    volatile boolean consumerDirty = false;
+    ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
     protected SessionImpl(int type, ConnectionImpl myConnection, boolean transacted, int acknowledgeMode, int dispatchId, RequestRegistry requestRegistry, String myHostname, String clientId) {
         this.type = type;
@@ -138,14 +139,26 @@ public class SessionImpl
         return requestRegistry.request(request);
     }
 
-    public synchronized void setRunning(boolean running) {
-        isRunning = running;
-        if (!running)
-            clearMessageChunks();
+    public void setRunning(boolean running) {
+        lock.writeLock().lock();
+        try {
+            isRunning = running;
+            if (!running)
+                clearMessageChunks();
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
-    public synchronized void setXaMode(boolean xaMode) {
-        this.xaMode = xaMode;
+    public void setXaMode(boolean xaMode) {
+        lock.writeLock().lock();
+        try {
+            this.xaMode = xaMode;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     public int getRecoveryEpoche() {
@@ -208,33 +221,41 @@ public class SessionImpl
         this.txCancelled = txCancelled;
     }
 
-    public synchronized void setResetInProgress(boolean resetInProgress) {
-        this.resetInProgress = resetInProgress;
-        if (DEBUG) System.out.println(new Date() + " " + toString() + ", setResetInProgress=" + resetInProgress);
-        if (resetInProgress) {
-            sessionQueue.stopQueue();
-            sessionQueue.clear();
-            sessionQueue.setCurrentCallInvalid(true);
-            for (Iterator iter = consumerMap.entrySet().iterator(); iter.hasNext(); ) {
-                MessageConsumerImpl c = (MessageConsumerImpl) ((Map.Entry) iter.next()).getValue();
-                c.clearCache();
-            }
-            clearMessageChunks();
-        } else {
-            sessionQueue.clear();
-            for (Iterator iter = consumerMap.entrySet().iterator(); iter.hasNext(); ) {
-                Map.Entry entry = (Map.Entry) iter.next();
-                MessageConsumerImpl c = (MessageConsumerImpl) entry.getValue();
+    public void setResetInProgress(boolean resetInProgress) {
+        lock.writeLock().lock();
+        try {
+            this.resetInProgress = resetInProgress;
+            if (DEBUG) System.out.println(new Date() + " " + toString() + ", setResetInProgress=" + resetInProgress);
+            if (resetInProgress) {
+                sessionQueue.stopQueue();
+                sessionQueue.clear();
+                sessionQueue.setCurrentCallInvalid(true);
+                for (Iterator iter = consumerMap.entrySet().iterator(); iter.hasNext(); ) {
+                    MessageConsumerImpl c = (MessageConsumerImpl) ((Map.Entry) iter.next()).getValue();
+                    c.clearCache();
+                }
+                clearMessageChunks();
+            } else {
                 if (DEBUG)
-                    System.out.println(new Date() + " " + toString() + ", setResetInProgress, c=" + c + ", recoveryInProgress=" + recoveryInProgress + ", started=" + c.isConsumerStarted() +
-                            ", fillCachePending=" + c.fillCachePending + ", closed=" + c.isClosed());
-                if (!recoveryInProgress && c.isConsumerStarted()) {
+                    System.out.println(new Date() + " " + toString() + ", setResetInProgress, c.size=" + consumerMap + ", recoveryInProgress=" + recoveryInProgress);
+                sessionQueue.clear();
+                for (Object o : consumerMap.entrySet()) {
+                    Map.Entry entry = (Map.Entry) o;
+                    MessageConsumerImpl c = (MessageConsumerImpl) entry.getValue();
                     if (DEBUG)
-                        System.out.println(new Date() + " " + toString() + ", setResetInProgress, c=" + c + ", call fill cache");
-                    c.fillCache(true);
+                        System.out.println(new Date() + " " + toString() + ", setResetInProgress, c=" + c + ", recoveryInProgress=" + recoveryInProgress + ", started=" + c.isConsumerStarted() +
+                                ", fillCachePending=" + c.fillCachePending + ", closed=" + c.isClosed());
+                    if (!recoveryInProgress && c.isConsumerStarted()) {
+                        if (DEBUG)
+                            System.out.println(new Date() + " " + toString() + ", setResetInProgress, c=" + c + ", call fill cache");
+                        c.fillCache(true);
+                    }
                 }
             }
+        } finally {
+            lock.writeLock().unlock();
         }
+
     }
 
     public void setConnectionConsumer(ConnectionConsumerImpl connectionConsumer) {
@@ -283,7 +304,8 @@ public class SessionImpl
     }
 
     public void storeTransactedMessage(MessageProducerImpl producer, MessageImpl msg) {
-        synchronized (transactedRequestList) {
+        lock.writeLock().lock();
+        try {
             minConnectionId = Math.min(minConnectionId, myConnection.getConnectionId());
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             DataOutputStream dos = new DataOutputStream(bos);
@@ -293,13 +315,19 @@ public class SessionImpl
                 e.printStackTrace();
             }
             transactedRequestList.add(new Object[]{producer, bos.toByteArray()});
+        } finally {
+            lock.writeLock().unlock();
         }
+
     }
 
     public Reply requestTransaction(CommitRequest req) {
-        synchronized (transactedRequestList) {
+        lock.writeLock().lock();
+        try {
             req.setMessages((List) transactedRequestList.clone());
             transactedRequestList.clear();
+        } finally {
+            lock.writeLock().unlock();
         }
 
         return requestRegistry.request(req);
@@ -310,19 +338,27 @@ public class SessionImpl
     }
 
     public List getAndClearCurrentTransaction() {
-        List clone = null;
-        synchronized (transactedRequestList) {
+        lock.writeLock().lock();
+        try {
+            List clone = null;
             minConnectionId = Integer.MAX_VALUE;
             clone = (List) transactedRequestList.clone();
             transactedRequestList.clear();
+            return clone;
+        } finally {
+            lock.writeLock().unlock();
         }
-        return clone;
+
     }
 
     public void dropTransaction() {
-        synchronized (transactedRequestList) {
+        lock.writeLock().lock();
+        try {
             transactedRequestList.clear();
+        } finally {
+            lock.writeLock().unlock();
         }
+
     }
 
     void setExceptionListener(ExceptionListener exceptionListener) {
@@ -337,38 +373,74 @@ public class SessionImpl
         this.myDispatchId = myDispatchId;
     }
 
-    synchronized void addMessageConsumerImpl(MessageConsumerImpl consumer) {
-        if (lastConsumerId == Integer.MAX_VALUE)
-            lastConsumerId = -1;
-        lastConsumerId++;
-        consumerMap.put(new Integer(lastConsumerId), consumer);
-        consumerDirty = true;
-        consumer.setConsumerId(lastConsumerId);
-        myConnection.increaseDuplicateLogSize(myConnection.getSmqpConsumerCacheSize());
+    void addMessageConsumerImpl(MessageConsumerImpl consumer) {
+        lock.writeLock().lock();
+        try {
+            if (lastConsumerId == Integer.MAX_VALUE)
+                lastConsumerId = -1;
+            lastConsumerId++;
+            consumerMap.put(new Integer(lastConsumerId), consumer);
+            consumerDirty = true;
+            consumer.setConsumerId(lastConsumerId);
+            myConnection.increaseDuplicateLogSize(myConnection.getSmqpConsumerCacheSize());
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
-    synchronized void removeMessageConsumerImpl(MessageConsumerImpl consumer) {
-        consumerMap.remove(new Integer(consumer.getConsumerId()));
-        myConnection.decreaseDuplicateLogSize(myConnection.getSmqpConsumerCacheSize());
-        consumerDirty = true;
+    void removeMessageConsumerImpl(MessageConsumerImpl consumer) {
+        lock.writeLock().lock();
+        try {
+            consumerMap.remove(new Integer(consumer.getConsumerId()));
+            myConnection.decreaseDuplicateLogSize(myConnection.getSmqpConsumerCacheSize());
+            consumerDirty = true;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
-    synchronized void addMessageProducerImpl(MessageProducerImpl producer) {
-        producers.add(producer);
+    void addMessageProducerImpl(MessageProducerImpl producer) {
+        lock.writeLock().lock();
+        try {
+            producers.add(producer);
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
-    synchronized void removeMessageProducerImpl(MessageProducerImpl producer) {
-        producers.remove(producer);
+    void removeMessageProducerImpl(MessageProducerImpl producer) {
+        lock.writeLock().lock();
+        try {
+            producers.remove(producer);
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
-    synchronized void addQueueBrowserImpl(QueueBrowserImpl browser) {
-        browsers.add(browser);
+    void addQueueBrowserImpl(QueueBrowserImpl browser) {
+        lock.writeLock().lock();
+        try {
+            browsers.add(browser);
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     // --> JMS 1.1
 
-    synchronized void removeQueueBrowserImpl(QueueBrowserImpl browser) {
-        browsers.remove(browser);
+    void removeQueueBrowserImpl(QueueBrowserImpl browser) {
+        lock.writeLock().lock();
+        try {
+            browsers.remove(browser);
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     public QueueReceiver createReceiver(Queue queue) throws JMSException {
@@ -874,18 +946,24 @@ public class SessionImpl
         delayedClosedProducers.clear();
     }
 
-    synchronized void startRecoverConsumers() {
-        sessionQueue.stopQueue();
-        recoveryInProgress = true;
-        recoveryEpoche++;
-        for (Iterator iter = consumerMap.entrySet().iterator(); iter.hasNext(); ) {
-            MessageConsumerImpl c = (MessageConsumerImpl) ((Map.Entry) iter.next()).getValue();
-            c.setWasRecovered(true);
-            c.clearCache();
+    void startRecoverConsumers() {
+        lock.writeLock().lock();
+        try {
+            sessionQueue.stopQueue();
+            recoveryInProgress = true;
+            recoveryEpoche++;
+            for (Iterator iter = consumerMap.entrySet().iterator(); iter.hasNext(); ) {
+                MessageConsumerImpl c = (MessageConsumerImpl) ((Map.Entry) iter.next()).getValue();
+                c.setWasRecovered(true);
+                c.clearCache();
+            }
+            sessionQueue.clear();
+            if (connectionConsumer != null && xaMode)
+                connectionConsumer.removeFromDuplicateLog(lastMessage.getMessage());
+        } finally {
+            lock.writeLock().unlock();
         }
-        sessionQueue.clear();
-        if (connectionConsumer != null && xaMode)
-            connectionConsumer.removeFromDuplicateLog(lastMessage.getMessage());
+
     }
 
     void endRecoverConsumers() {
@@ -975,12 +1053,13 @@ public class SessionImpl
             return;
         sessionQueue.stopQueue();
         sessionQueue.clear();
-        synchronized (this) {
+        lock.writeLock().lock();
+        try {
             closed = true;
             if (consumerMap.size() > 0) {
                 myConnection.decreaseDuplicateLogSize(myConnection.getSmqpConsumerCacheSize() * consumerMap.size());
-                for (Iterator iter = consumerMap.entrySet().iterator(); iter.hasNext(); ) {
-                    MessageConsumerImpl consumer = (MessageConsumerImpl) ((Map.Entry) iter.next()).getValue();
+                for (Object o : consumerMap.entrySet()) {
+                    MessageConsumerImpl consumer = (MessageConsumerImpl) ((Map.Entry) o).getValue();
                     consumer.cancel();
                 }
                 consumerMap.clear();
@@ -990,7 +1069,10 @@ public class SessionImpl
             if (transacted) {
                 dropTransaction();
             }
+        } finally {
+            lock.writeLock().unlock();
         }
+
 
         try {
             requestRegistry.request(new CloseSessionRequest(0, dispatchId));
@@ -1052,11 +1134,17 @@ public class SessionImpl
         return messageListener;
     }
 
-    public synchronized void setMessageListener(MessageListener messageListener) throws JMSException {
-        verifyState();
-        this.messageListener = messageListener;
-        if (messageListener != null)
-            sessionQueue.stopQueue();
+    public void setMessageListener(MessageListener messageListener) throws JMSException {
+        lock.writeLock().lock();
+        try {
+            verifyState();
+            this.messageListener = messageListener;
+            if (messageListener != null)
+                sessionQueue.stopQueue();
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     boolean isShadowConsumerCreated() {
@@ -1064,39 +1152,58 @@ public class SessionImpl
     }
 
     void createShadowConsumer(String queueName) throws Exception {
-        shadowConsumerQueueName = queueName;
-        Reply reply = requestRegistry.request(new CreateShadowConsumerRequest(this, dispatchId, queueName));
-        if (!reply.isOk())
-            throw reply.getException();
-        shadowConsumerCreated = true;
+        lock.writeLock().lock();
+        try {
+            shadowConsumerQueueName = queueName;
+            Reply reply = requestRegistry.request(new CreateShadowConsumerRequest(this, dispatchId, queueName));
+            if (!reply.isOk())
+                throw reply.getException();
+            shadowConsumerCreated = true;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
-    synchronized void addMessageChunk(Object obj) {
-        if (obj instanceof CloseSession && !isRunning) {
-            _close();
-            ((CloseSession) obj)._sem.notifySingleWaiter();
-            return;
+    void addMessageChunk(Object obj) {
+        lock.writeLock().lock();
+        try {
+            if (obj instanceof CloseSession && !isRunning) {
+                _close();
+                ((CloseSession) obj)._sem.notifySingleWaiter();
+                return;
+            }
+            messageChunk.add(obj);
+        } finally {
+            lock.writeLock().unlock();
         }
-        if (MessageTracker.enabled && obj instanceof MessageEntry) {
-            MessageTracker.getInstance().track(((MessageEntry) obj).getMessage(), new String[]{myConnection.toString(), toString()}, "addMessageChunk, " + ((MessageEntry) obj).getConnectionId() + " / " + myConnection.getConnectionId());
-        }
-        messageChunk.add(obj);
+
     }
 
-    synchronized void clearMessageChunks() {
-        messageChunk.clear();
+    void clearMessageChunks() {
+        lock.writeLock().lock();
+        try {
+            messageChunk.clear();
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
-    private synchronized MessageEntry nextMessageChunk() {
-        if (messageChunk.getSize() == 0)
-            return null;
-        Object o = messageChunk.remove();
-        if (o instanceof CloseSession) {
-            _close();
-            ((CloseSession) o)._sem.notifySingleWaiter();
-            return null;
+    private MessageEntry nextMessageChunk() {
+        lock.writeLock().lock();
+        try {
+            if (messageChunk.getSize() == 0)
+                return null;
+            Object o = messageChunk.remove();
+            if (o instanceof CloseSession) {
+                _close();
+                ((CloseSession) o)._sem.notifySingleWaiter();
+                return null;
+            }
+            return (MessageEntry) o;
+        } finally {
+            lock.writeLock().unlock();
         }
-        return (MessageEntry) o;
     }
 
     boolean assignLastMessage() throws Exception {
@@ -1105,19 +1212,10 @@ public class SessionImpl
 
     boolean assignLastMessage(boolean duplicate) throws Exception {
         if (lastMessage != null) {
-            if (MessageTracker.enabled) {
-                MessageTracker.getInstance().track(lastMessage.getMessage(), new String[]{myConnection.toString(), toString()}, "assignLastMessage, duplicate=" + duplicate + " ...");
-            }
             Request request = new AssociateMessageRequest(this, dispatchId, lastMessage.getMessageIndex(), duplicate);
             Reply reply = requestRegistry.request(request);
             if (!reply.isOk()) {
-                if (MessageTracker.enabled) {
-                    MessageTracker.getInstance().track(lastMessage.getMessage(), new String[]{myConnection.toString(), toString()}, "assignLastMessage, exception=" + reply.getException());
-                }
                 throw reply.getException();
-            }
-            if (MessageTracker.enabled) {
-                MessageTracker.getInstance().track(lastMessage.getMessage(), new String[]{myConnection.toString(), toString()}, "assignLastMessage, cancelled=" + request.isCancelledByValidator());
             }
             return request.isCancelledByValidator();
         }
@@ -1125,9 +1223,6 @@ public class SessionImpl
     }
 
     void deleteMessage(MessageEntry messageEntry, boolean fromReadTx) {
-        if (MessageTracker.enabled) {
-            MessageTracker.getInstance().track(messageEntry.getMessage(), new String[]{myConnection.toString(), toString()}, "deleteMessage, fromReadTx=" + fromReadTx + " ...");
-        }
         Request request = new DeleteMessageRequest(this, dispatchId, lastMessage.getMessageIndex(), fromReadTx);
         requestRegistry.request(request);
     }
@@ -1165,13 +1260,7 @@ public class SessionImpl
                     setRunning(false);
                     return;
                 }
-                if (MessageTracker.enabled) {
-                    MessageTracker.getInstance().track(message, new String[]{myConnection.toString(), toString()}, "run, " + lastMessage.getConnectionId() + " / " + myConnection.getConnectionId());
-                }
                 if (lastMessage.getConnectionId() != myConnection.getConnectionId()) {
-                    if (MessageTracker.enabled) {
-                        MessageTracker.getInstance().track(message, new String[]{myConnection.toString(), toString()}, "run, invalid connectionId (" + lastMessage.getConnectionId() + " vs " + myConnection.getConnectionId() + ")");
-                    }
                     continue; // continue with next message
                 }
                 lastMessage.moveMessageAttributes();
@@ -1190,9 +1279,6 @@ public class SessionImpl
                 }
                 boolean duplicate = connectionConsumer.isDuplicate(message);
                 if (autoAssign && duplicate) {
-                    if (MessageTracker.enabled) {
-                        MessageTracker.getInstance().track(message, new String[]{myConnection.toString(), toString()}, "run, duplicate, continue with next message!");
-                    }
                     deleteMessage(lastMessage, acknowledgeMode != Session.CLIENT_ACKNOWLEDGE);
                     continue;
                 }
@@ -1201,34 +1287,19 @@ public class SessionImpl
                 message.reset();
                 message.setUseThreadContextCL(useThreadContextCL);
                 if (xaMode && duplicate) {
-                    if (MessageTracker.enabled) {
-                        MessageTracker.getInstance().track(message, new String[]{myConnection.toString(), toString()}, "run, duplicate!");
-                    }
                     cancelled = assignLastMessage(true);
                     if (cancelled)
                         connectionConsumer.removeFromDuplicateLog(message);
                 } else {
-                    if (MessageTracker.enabled) {
-                        MessageTracker.getInstance().track(message, new String[]{myConnection.toString(), toString()}, "run, onMessage...");
-                    }
                     withinOnMessage = true;
                     onMessageMessage = message;
                     messageListener.onMessage(message);
                     onMessageMessage = null;
                     withinOnMessage = false;
-                    if (MessageTracker.enabled) {
-                        MessageTracker.getInstance().track(message, new String[]{myConnection.toString(), toString()}, "run, onMessage ok");
-                    }
                 }
                 // eventually ack message when auto-ack
                 if (!cancelled && !transacted && acknowledgeMode != Session.CLIENT_ACKNOWLEDGE) {
-                    if (MessageTracker.enabled) {
-                        MessageTracker.getInstance().track(message, new String[]{myConnection.toString(), toString()}, "run, ack ...");
-                    }
                     cancelled = acknowledgeMessage(lastMessage.getMessageIndex());
-                    if (MessageTracker.enabled) {
-                        MessageTracker.getInstance().track(message, new String[]{myConnection.toString(), toString()}, "run, ack done, cancelled=" + cancelled);
-                    }
                     if (cancelled) {
                         setRunning(false);
                         return;
@@ -1236,9 +1307,6 @@ public class SessionImpl
                 }
             } catch (Exception e) {
                 withinOnMessage = false;
-                if (MessageTracker.enabled) {
-                    MessageTracker.getInstance().track(message, new String[]{myConnection.toString(), toString()}, "run, exception=" + e);
-                }
                 setRunning(false);
                 return;
             } finally {
@@ -1286,20 +1354,26 @@ public class SessionImpl
         return duplicate;
     }
 
-    private synchronized void doDeliverMessage(AsyncMessageDeliveryRequest request) {
-        if (closed || resetInProgress || recoveryInProgress || request.getRecoveryEpoche() != recoveryEpoche)
-            return;
+    private void doDeliverMessage(AsyncMessageDeliveryRequest request) {
+        lock.writeLock().lock();
+        try {
+            if (closed || resetInProgress || recoveryInProgress || request.getRecoveryEpoche() != recoveryEpoche)
+                return;
 
-        int consumerId = request.getListenerId();
-        MessageConsumerImpl consumer = (MessageConsumerImpl) consumerMap.get(new Integer(consumerId));
-        if (consumer != null) {
-            if (SMQPUtil.isBulk(request)) {
-                AsyncMessageDeliveryRequest[] requests = SMQPUtil.createRequests(request);
-                consumer.addToCache(requests, request.isRequiresRestart());
-            } else {
-                consumer.addToCache(request);
+            int consumerId = request.getListenerId();
+            MessageConsumerImpl consumer = (MessageConsumerImpl) consumerMap.get(new Integer(consumerId));
+            if (consumer != null) {
+                if (SMQPUtil.isBulk(request)) {
+                    AsyncMessageDeliveryRequest[] requests = SMQPUtil.createRequests(request);
+                    consumer.addToCache(requests, request.isRequiresRestart());
+                } else {
+                    consumer.addToCache(request);
+                }
             }
+        } finally {
+            lock.writeLock().unlock();
         }
+
     }
 
     void triggerInvocation() {
@@ -1338,16 +1412,20 @@ public class SessionImpl
         }
 
         void copyConsumers() {
-            synchronized (SessionImpl.this) {
+            lock.readLock().lock();
+            try {
                 if (consumerDirty) {
                     consumerCopy = new MessageConsumerImpl[consumerMap.size()];
                     int i = 0;
-                    for (Iterator iter = consumerMap.entrySet().iterator(); iter.hasNext(); ) {
-                        consumerCopy[i++] = (MessageConsumerImpl) ((Map.Entry) iter.next()).getValue();
+                    for (Object o : consumerMap.entrySet()) {
+                        consumerCopy[i++] = (MessageConsumerImpl) ((Map.Entry) o).getValue();
                     }
                     consumerDirty = false;
                 }
+            } finally {
+                lock.readLock().unlock();
             }
+
         }
 
         // Checks if the session is in valid state.

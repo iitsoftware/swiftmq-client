@@ -22,23 +22,22 @@ import com.swiftmq.tools.dump.Dumpable;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicReference;
 
 
 public class MetaData implements Dumpable {
-    String name;
-    String displayName;
-    String vendor;
-    String version;
-    String className;
-    String description;
+    final AtomicReference<String> name = new AtomicReference<String>();
+    final AtomicReference<String> displayName = new AtomicReference<String>();
+    final AtomicReference<String> vendor = new AtomicReference<String>();
+    final AtomicReference<String> version = new AtomicReference<String>();
+    final AtomicReference<String> className = new AtomicReference<String>();
+    final AtomicReference<String> description = new AtomicReference<String>();
 
     public MetaData(String displayName, String vendor, String version, String description) {
-        // SBgen: Assign variables
-        this.displayName = displayName;
-        this.vendor = vendor;
-        this.version = version;
-        this.description = description;
-        // SBgen: End assign
+        this.displayName.set(displayName);
+        this.vendor.set(vendor);
+        this.version.set(version);
+        this.description.set(description);
     }
 
     MetaData() {
@@ -64,102 +63,70 @@ public class MetaData implements Dumpable {
         return null;
     }
 
-    public synchronized void writeContent(DataOutput out)
+    public void writeContent(DataOutput out)
             throws IOException {
-        writeDump(out, displayName);
-        writeDump(out, vendor);
-        writeDump(out, version);
-        writeDump(out, description);
-        writeDump(out, className);
+        writeDump(out, displayName.get());
+        writeDump(out, vendor.get());
+        writeDump(out, version.get());
+        writeDump(out, description.get());
+        writeDump(out, className.get());
     }
 
     public void readContent(DataInput in)
             throws IOException {
-        displayName = readDump(in);
-        vendor = readDump(in);
-        version = readDump(in);
-        description = readDump(in);
-        className = readDump(in);
+        displayName.set(readDump(in));
+        vendor.set(readDump(in));
+        version.set(readDump(in));
+        description.set(readDump(in));
+        className.set(readDump(in));
     }
 
-    /**
-     * @return
-     * @SBGen Method get name
-     */
     public String getName() {
-        // SBgen: Get variable
-        return (name);
+        return (name.get());
     }
 
     public void setName(String name) {
-        // SBgen: Assign variable
-        this.name = name;
+        this.name.set(name);
     }
 
-    /**
-     * @return
-     * @SBGen Method get displayName
-     */
     public String getDisplayName() {
-        // SBgen: Get variable
-        return (displayName);
+        return (displayName.get());
     }
 
-    /**
-     * @return
-     * @SBGen Method get vendor
-     */
     public String getVendor() {
-        // SBgen: Get variable
-        return (vendor);
+        return (vendor.get());
     }
 
-    /**
-     * @return
-     * @SBGen Method get version
-     */
     public String getVersion() {
-        // SBgen: Get variable
-        return (version);
+        return (version.get());
     }
 
-    /**
-     * @return
-     * @SBGen Method get className
-     */
     public String getClassName() {
-        // SBgen: Get variable
-        return (className);
+        return (className.get());
     }
 
-    public synchronized void setClassName(String className) {
-        // SBgen: Assign variable
-        this.className = className;
+    public void setClassName(String className) {
+        this.className.set(className);
     }
 
-    /**
-     * @return
-     * @SBGen Method get description
-     */
     public String getDescription() {
-        // SBgen: Get variable
-        return (description);
+        return (description.get());
     }
 
     public String toString() {
         StringBuffer s = new StringBuffer();
         s.append("[MetaData, name=");
-        s.append(name);
+        s.append(name.get());
         s.append(", displayName=");
-        s.append(displayName);
+        s.append(displayName.get());
         s.append(", description=");
-        s.append(description);
+        s.append(description.get());
         s.append(", version=");
-        s.append(version);
+        s.append(version.get());
         s.append(", vendor=");
-        s.append(vendor);
+        s.append(vendor.get());
         s.append(", className=");
-        s.append(className);
+        s.append(className.get());
         s.append("]");
         return s.toString();
     }

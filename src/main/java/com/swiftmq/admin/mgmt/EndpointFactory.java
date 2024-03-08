@@ -17,6 +17,7 @@
 
 package com.swiftmq.admin.mgmt;
 
+import com.swiftmq.admin.mgmt.v750.EndpointImpl;
 import com.swiftmq.jms.BytesMessageImpl;
 import com.swiftmq.jms.MessageImpl;
 import com.swiftmq.jms.QueueImpl;
@@ -103,29 +104,19 @@ public class EndpointFactory {
 
             Endpoint endpoint = null;
             try {
-                switch (MGMT_PROTOCOL_VERSION) {
-                    case 750: {
-                        ProtocolReply pr = (ProtocolReply) request(new ProtocolRequest(750));
-                        if (pr.isOk()) {
-                            endpoint = new com.swiftmq.admin.mgmt.v750.EndpointImpl(connection, senderSession, sender, receiverSession, receiver, replyQueue, rsf.createRequestService(750), createInternalCommands);
-                            endpoint.setSubscriptionFilterEnabled(true);
-                        } else {
-                            pr = (ProtocolReply) request(new ProtocolRequest(400));
-                            if (!pr.isOk())
-                                throw pr.getException();
-                            endpoint = new com.swiftmq.admin.mgmt.v400.EndpointImpl(connection, senderSession, sender, receiverSession, receiver, replyQueue, rsf.createRequestService(400), createInternalCommands);
-                        }
-                    }
-                    break;
-                    case 400: {
-                        ProtocolReply pr = (ProtocolReply) request(new ProtocolRequest(400));
+                if (MGMT_PROTOCOL_VERSION == 750) {
+                    ProtocolReply pr = (ProtocolReply) request(new ProtocolRequest(750));
+                    if (pr.isOk()) {
+                        endpoint = new EndpointImpl(connection, senderSession, sender, receiverSession, receiver, replyQueue, rsf.createRequestService(750), createInternalCommands);
+                        endpoint.setSubscriptionFilterEnabled(true);
+                    } else {
+                        pr = (ProtocolReply) request(new ProtocolRequest(400));
                         if (!pr.isOk())
                             throw pr.getException();
-                        endpoint = new com.swiftmq.admin.mgmt.v400.EndpointImpl(connection, senderSession, sender, receiverSession, receiver, replyQueue, rsf.createRequestService(400), createInternalCommands);
+                        endpoint = new com.swiftmq.admin.mgmt.v750.EndpointImpl(connection, senderSession, sender, receiverSession, receiver, replyQueue, rsf.createRequestService(400), createInternalCommands);
                     }
-                    break;
-                    default:
-                        throw new Exception("Invalid management protocol version (set via swiftmq.mgmt.protocol.version): " + MGMT_PROTOCOL_VERSION);
+                } else {
+                    throw new Exception("Invalid management protocol version (set via swiftmq.mgmt.protocol.version): " + MGMT_PROTOCOL_VERSION);
                 }
             } catch (Exception e) {
                 cleanup();

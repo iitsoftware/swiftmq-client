@@ -19,9 +19,11 @@ package com.swiftmq.swiftlet.mgmt;
 
 import com.swiftmq.swiftlet.Swiftlet;
 import com.swiftmq.swiftlet.mgmt.event.MgmtListener;
+import com.swiftmq.tools.collection.ConcurrentList;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * The Management Swiftlet provides an interface to the Management subsystem of SwiftMQ.
@@ -29,17 +31,17 @@ import java.util.List;
  * @author IIT GmbH, Bremen/Germany, Copyright (c) 2000-2002, All Rights Reserved
  */
 public abstract class MgmtSwiftlet extends Swiftlet {
-    List listeners = new ArrayList();
-    boolean active = false;
+    private final List<MgmtListener> listeners = new ConcurrentList<>(new ArrayList<>());
+    private final AtomicBoolean active = new AtomicBoolean(false);
 
     /**
      * Add a management listener
      *
      * @param l management listener.
      */
-    public synchronized void addMgmtListener(MgmtListener l) {
+    public void addMgmtListener(MgmtListener l) {
         listeners.add(l);
-        if (active)
+        if (active.get())
             l.adminToolActivated();
     }
 
@@ -48,14 +50,14 @@ public abstract class MgmtSwiftlet extends Swiftlet {
      *
      * @param l management listener.
      */
-    public synchronized void removeMgmtListener(MgmtListener l) {
+    public void removeMgmtListener(MgmtListener l) {
         listeners.remove(l);
     }
 
     /**
      * Remove all management listeners
      */
-    protected synchronized void removeAllMgmtListeners() {
+    protected void removeAllMgmtListeners() {
         listeners.clear();
     }
 
@@ -66,15 +68,14 @@ public abstract class MgmtSwiftlet extends Swiftlet {
      *
      * @param activated states whether an admin tool has been activated or not
      */
-    protected synchronized void fireMgmtEvent(boolean activated) {
-        for (int i = 0; i < listeners.size(); i++) {
-            MgmtListener l = (MgmtListener) listeners.get(i);
+    protected void fireMgmtEvent(boolean activated) {
+        for (MgmtListener l : listeners) {
             if (activated)
                 l.adminToolActivated();
             else
                 l.adminToolDeactivated();
         }
-        active = activated;
+        active.set(activated);
     }
 
     /**

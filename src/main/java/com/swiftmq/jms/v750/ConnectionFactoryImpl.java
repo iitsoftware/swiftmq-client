@@ -329,7 +329,7 @@ public class ConnectionFactoryImpl
         return createConnection(null, null);
     }
 
-    public synchronized Connection createConnection(String userName, String password) throws JMSException {
+    public Connection createConnection(String userName, String password) throws JMSException {
         // create connection and return it
         ConnectionImpl qc = new ConnectionImpl(userName == null ? "anonymous" : userName, password, createReconnector());
         qc.assignClientId(clientId);
@@ -353,7 +353,7 @@ public class ConnectionFactoryImpl
         return createXAConnection(null, null);
     }
 
-    public synchronized XAConnection createXAConnection(String userName, String password) throws JMSException {
+    public XAConnection createXAConnection(String userName, String password) throws JMSException {
         // create connection and return it
         XAConnectionImpl qc = new XAConnectionImpl(userName == null ? "anonymous" : userName, password, createReconnector());
         qc.assignClientId(clientId);
@@ -378,8 +378,8 @@ public class ConnectionFactoryImpl
         return (createQueueConnection(null, null));
     }
 
-    public synchronized QueueConnection createQueueConnection(String userName,
-                                                              String password) throws JMSException {
+    public QueueConnection createQueueConnection(String userName,
+                                                 String password) throws JMSException {
         // create queue connection and return it
         QueueConnectionImpl qc = new QueueConnectionImpl(userName == null ? "anonymous" : userName, password, createReconnector());
         qc.assignClientId(clientId);
@@ -428,7 +428,7 @@ public class ConnectionFactoryImpl
         return (createTopicConnection(null, null));
     }
 
-    public synchronized TopicConnection createTopicConnection(String userName, String password)
+    public TopicConnection createTopicConnection(String userName, String password)
             throws JMSException {
         // create queue connection and return it
         TopicConnectionImpl qc = new TopicConnectionImpl(userName == null ? "anonymous" : userName, password, createReconnector());

@@ -1,8 +1,9 @@
 package com.swiftmq.jms.springsupport;
 
 import javax.jms.*;
-import javax.jms.Queue;
-import java.util.*;
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class SharedJMSConnection
         implements Connection, QueueConnection, TopicConnection {
@@ -11,8 +12,8 @@ public class SharedJMSConnection
     long poolExpiration = 0;
     boolean firstTransacted = false;
     int firstAckMode = -1;
-    List pool = new LinkedList();
-    Timer timer = new Timer(true);
+    private final ConcurrentLinkedQueue<PoolEntry> pool = new ConcurrentLinkedQueue<>();
+    private final Timer timer = new Timer(true);
     TimerTask expiryChecker = null;
 
     public SharedJMSConnection(Connection internalConnection, long poolExpiration) {
@@ -34,10 +35,10 @@ public class SharedJMSConnection
         return poolExpiration;
     }
 
-    public synchronized Session createSession(boolean transacted, int ackMode) throws JMSException {
+    public Session createSession(boolean transacted, int ackMode) throws JMSException {
         if (DEBUG) System.out.println(toString() + "/createSession, poolSize=" + pool.size());
-        if (pool.size() > 0) {
-            PoolEntry entry = (PoolEntry) pool.remove(0);
+        PoolEntry entry = pool.poll();
+        if (entry != null) {
             if (DEBUG) System.out.println(toString() + "/createSession, returning session from pool: " + entry);
             return entry.pooledSession;
         }
@@ -52,33 +53,28 @@ public class SharedJMSConnection
         return new PooledSession(this, internalConnection.createSession(transacted, ackMode));
     }
 
-    protected synchronized void checkIn(PooledSession pooledSession) {
-        PoolEntry entry = new PoolEntry(System.currentTimeMillis(), pooledSession);
-        if (pool.size() == 0)
-            pool.add(entry);
-        else
-            pool.add(0, entry);
-        if (DEBUG) System.out.println(toString() + "/checkIn, poolSize=" + pool.size() + ", entry=" + entry);
+    protected void checkIn(PooledSession pooledSession) {
+        pool.offer(new PoolEntry(System.currentTimeMillis(), pooledSession));
+        if (DEBUG) System.out.println(toString() + "/checkIn, poolSize=" + pool.size());
     }
 
-    public synchronized void checkExpired() {
+    public void checkExpired() {
         if (DEBUG) System.out.println(toString() + "/checkExpired, poolSize=" + pool.size());
-        if (pool.size() == 0)
-            return;
-        for (Iterator iter = pool.iterator(); iter.hasNext(); ) {
-            PoolEntry entry = (PoolEntry) iter.next();
-            long now = System.currentTimeMillis();
-            if (DEBUG)
+        long now = System.currentTimeMillis();
+
+        PoolEntry entry;
+        while ((entry = pool.peek()) != null && entry.poolInsertionTime + poolExpiration <= now) {
+            if (DEBUG) {
                 System.out.println(toString() + "/checkExpired, now=" + now + ", expTime=" + (entry.poolInsertionTime + poolExpiration));
-            entry.pooledSession.checkExpired();
-            if (entry.poolInsertionTime + poolExpiration <= now) {
-                try {
-                    if (DEBUG) System.out.println(toString() + "/checkExpired, closing session=" + entry.pooledSession);
-                    entry.pooledSession.closeInternal();
-                } catch (JMSException e) {
-                }
-                iter.remove();
+                entry.pooledSession.checkExpired();
+                System.out.println(toString() + "/checkExpired, closing session=" + entry.pooledSession);
             }
+            try {
+                entry.pooledSession.closeInternal();
+            } catch (JMSException e) {
+                // Exception handling
+            }
+            pool.poll(); // Remove the processed entry
         }
     }
 
@@ -131,16 +127,15 @@ public class SharedJMSConnection
         if (DEBUG) System.out.println(toString() + "/close (ignore)");
     }
 
-    public synchronized void destroy() throws Exception {
+    public void destroy() throws Exception {
         if (DEBUG) System.out.println(toString() + "/destroy");
-        if (pool.size() > 0) {
-            for (Iterator iter = pool.iterator(); iter.hasNext(); ) {
-                PoolEntry entry = (PoolEntry) iter.next();
-                if (DEBUG) System.out.println(toString() + "/destroy, closing session=" + entry.pooledSession);
-                entry.pooledSession.closeInternal();
-                iter.remove();
-            }
+
+        PoolEntry entry;
+        while ((entry = pool.poll()) != null) {
+            if (DEBUG) System.out.println(toString() + "/destroy, closing session=" + entry.pooledSession);
+            entry.pooledSession.closeInternal();
         }
+
         internalConnection.close();
     }
 

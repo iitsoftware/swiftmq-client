@@ -21,10 +21,12 @@ import com.swiftmq.amqp.v100.generated.messaging.delivery_state.DeliveryStateIF;
 import com.swiftmq.amqp.v100.generated.messaging.delivery_state.Rejected;
 import com.swiftmq.amqp.v100.generated.messaging.message_format.AmqpValue;
 import com.swiftmq.amqp.v100.generated.transactions.coordination.*;
+import com.swiftmq.amqp.v100.generated.transport.definitions.Error;
 import com.swiftmq.amqp.v100.messaging.AMQPMessage;
 import com.swiftmq.amqp.v100.types.AMQPBoolean;
 
 import java.util.Set;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * <p>
@@ -44,6 +46,7 @@ public class TransactionController {
     volatile boolean supportPromotableTransactions = false;
     volatile boolean supportMultiTxnsPerSsn = false;
     volatile boolean supportMultiSsnsPerTxn = false;
+    ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
     protected TransactionController(Session mySession) {
         this.mySession = mySession;
@@ -55,41 +58,53 @@ public class TransactionController {
      * @return transaction id
      * @throws AMQPException on error
      */
-    public synchronized TxnIdIF createTxnId() throws AMQPException {
-        if (producer == null) {
-            producer = mySession.createProducer(Coordinator.DESCRIPTOR_NAME, QoS.AT_LEAST_ONCE);
-            producer.setTransactionController(true);
-            Set capa = producer.getDestinationCapabilities();
-            if (capa != null) {
-                if (capa.contains(TxnCapability.LOCAL_TRANSACTIONS.getValue()))
-                    supportLocalTransactions = true;
-                supportDistributedTransactions = capa.contains(TxnCapability.DISTRIBUTED_TRANSACTIONS.getValue());
-                supportPromotableTransactions = capa.contains(TxnCapability.PROMOTABLE_TRANSACTIONS.getValue());
-                supportMultiTxnsPerSsn = capa.contains(TxnCapability.MULTI_TXNS_PER_SSN.getValue());
-                supportMultiSsnsPerTxn = capa.contains(TxnCapability.MULTI_SSNS_PER_TXN.getValue());
+    public TxnIdIF createTxnId() throws AMQPException {
+        lock.writeLock().lock();
+        try {
+            if (producer == null) {
+                producer = mySession.createProducer(Coordinator.DESCRIPTOR_NAME, QoS.AT_LEAST_ONCE);
+                producer.setTransactionController(true);
+                Set capa = producer.getDestinationCapabilities();
+                if (capa != null) {
+                    if (capa.contains(TxnCapability.LOCAL_TRANSACTIONS.getValue()))
+                        supportLocalTransactions = true;
+                    supportDistributedTransactions = capa.contains(TxnCapability.DISTRIBUTED_TRANSACTIONS.getValue());
+                    supportPromotableTransactions = capa.contains(TxnCapability.PROMOTABLE_TRANSACTIONS.getValue());
+                    supportMultiTxnsPerSsn = capa.contains(TxnCapability.MULTI_TXNS_PER_SSN.getValue());
+                    supportMultiSsnsPerTxn = capa.contains(TxnCapability.MULTI_SSNS_PER_TXN.getValue());
+                }
             }
+            AMQPMessage msg = new AMQPMessage();
+            msg.setAmqpValue(new AmqpValue(new Declare()));
+            Declared declared = (Declared) producer.send(msg);
+            return declared == null ? null : declared.getTxnId();
+        } finally {
+            lock.writeLock().unlock();
         }
-        AMQPMessage msg = new AMQPMessage();
-        msg.setAmqpValue(new AmqpValue(new Declare()));
-        Declared declared = (Declared) producer.send(msg);
-        return declared == null ? null : declared.getTxnId();
+
     }
 
-    private synchronized void discharge(TxnIdIF txnId, boolean fail) throws AMQPException {
-        AMQPMessage msg = new AMQPMessage();
-        Discharge discharge = new Discharge();
-        discharge.setTxnId(txnId);
-        discharge.setFail(new AMQPBoolean(fail));
-        msg.setAmqpValue(new AmqpValue(discharge));
-        DeliveryStateIF deliveryState = producer.send(msg);
-        if (deliveryState instanceof Rejected) {
-            Rejected rejected = (Rejected) deliveryState;
-            com.swiftmq.amqp.v100.generated.transport.definitions.Error error = rejected.getError();
-            if (error != null)
-                throw new AMQPException(error.getValueString());
-            else
-                throw new AMQPException(("Unknown transactiom error"));
+    private void discharge(TxnIdIF txnId, boolean fail) throws AMQPException {
+        lock.readLock().lock();
+        try {
+            AMQPMessage msg = new AMQPMessage();
+            Discharge discharge = new Discharge();
+            discharge.setTxnId(txnId);
+            discharge.setFail(new AMQPBoolean(fail));
+            msg.setAmqpValue(new AmqpValue(discharge));
+            DeliveryStateIF deliveryState = producer.send(msg);
+            if (deliveryState instanceof Rejected) {
+                Rejected rejected = (Rejected) deliveryState;
+                Error error = rejected.getError();
+                if (error != null)
+                    throw new AMQPException(error.getValueString());
+                else
+                    throw new AMQPException(("Unknown transactiom error"));
+            }
+        } finally {
+            lock.readLock().unlock();
         }
+
     }
 
     /**
@@ -158,13 +173,19 @@ public class TransactionController {
     }
 
     protected void close() {
-        if (producer != null) {
-            try {
-                producer.close();
-            } catch (AMQPException e) {
+        lock.writeLock().lock();
+        try {
+            if (producer != null) {
+                try {
+                    producer.close();
+                } catch (AMQPException e) {
+                }
+                producer = null;
             }
-            producer = null;
+        } finally {
+            lock.writeLock().unlock();
         }
+
     }
 
     public String toString() {
