@@ -17,41 +17,36 @@
 
 package com.swiftmq.admin.mgmt;
 
-import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class EndpointRegistry {
-    Map endpoints = new HashMap();
-    boolean closed = false;
+    private final Map<String, Endpoint> endpoints = new ConcurrentHashMap<>();
+    private volatile boolean closed = false;
 
     public EndpointRegistry() {
     }
 
-    public synchronized void put(String routerName, Endpoint endpoint) throws EndpointRegistryClosedException {
+    public void put(String routerName, Endpoint endpoint) throws EndpointRegistryClosedException {
         if (closed)
             throw new EndpointRegistryClosedException("EndpointRegistry already closed!");
         endpoints.put(routerName, endpoint);
     }
 
-    public synchronized Endpoint get(String routerName) {
+    public Endpoint get(String routerName) {
         return (Endpoint) endpoints.get(routerName);
     }
 
-    public synchronized Endpoint remove(String routerName) {
+    public Endpoint remove(String routerName) {
         return (Endpoint) endpoints.remove(routerName);
     }
 
     public void close() {
-        Map map;
-        synchronized (this) {
-            map = (Map) ((HashMap) endpoints).clone();
-            endpoints.clear();
-            closed = true;
-        }
-        for (Iterator iter = map.entrySet().iterator(); iter.hasNext(); ) {
-            Endpoint endpoint = (Endpoint) ((Map.Entry) iter.next()).getValue();
+        for (Map.Entry<String, Endpoint> o : endpoints.entrySet()) {
+            Endpoint endpoint = o.getValue();
             endpoint.close();
         }
+        endpoints.clear();
+        closed = true;
     }
 }

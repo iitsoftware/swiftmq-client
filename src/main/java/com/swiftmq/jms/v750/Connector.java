@@ -45,6 +45,7 @@ import javax.jms.JMSSecurityException;
 import java.io.IOException;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class Connector implements ReconnectVisitor, InboundHandler, ExceptionHandler {
     private static final int MAX_INTERNAL_RETRY_COUNT = Integer.parseInt(System.getProperty("swiftmq.reconnect.max.internal.retry.count", "10"));
@@ -66,7 +67,7 @@ public class Connector implements ReconnectVisitor, InboundHandler, ExceptionHan
     boolean closed = false;
     boolean closeInProgress = false;
     Timeout requestTimeoutTimer = null;
-    Object closeSync = new Object();
+    ReentrantLock lock = new ReentrantLock();
     int internalRetryCount = MAX_INTERNAL_RETRY_COUNT;
 
     public Connector(Reconnector reconnector) {
@@ -503,13 +504,17 @@ public class Connector implements ReconnectVisitor, InboundHandler, ExceptionHan
 
     public void close() {
         if (debug) System.out.println(toString() + ", close ...");
-        synchronized (closeSync) {
+        lock.lock();
+        try {
             if (closeInProgress) {
                 if (debug) System.out.println(toString() + ", close in progress, return");
                 return;
             }
             closeInProgress = true;
+        } finally {
+            lock.unlock();
         }
+
         Semaphore sem = new Semaphore();
         dispatch(new POClose(sem));
         sem.waitHere();

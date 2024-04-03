@@ -17,27 +17,24 @@
 
 package com.swiftmq.tools.queue;
 
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public abstract class SingleProcessorQueue {
     private Object[] elements;
     private int first = 0;
-    private int size = 0;
-    private int bucketSize = 32;
-    private int bulkSize = 1;
-    private boolean closed = false;
-    private boolean started = false;
-    private boolean processorActive = false;
+    private volatile int size = 0;
+    private final int bucketSize;
+    private volatile boolean closed = false;
+    private volatile boolean started = false;
+    private volatile boolean processorActive = false;
     private Object[] bulkWrapper = null;
     private Object[] passDirectWrapper = new Object[1];
     private Object[] nullArray = null;
-    private Lock lock = new ReentrantLock();
+    private ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
     public SingleProcessorQueue(int bucketSize, int bulkSize) {
         elements = new Object[bucketSize];
         this.bucketSize = bucketSize;
-        this.bulkSize = bulkSize;
         bulkWrapper = new Object[bulkSize == -1 ? bucketSize : bulkSize];
         nullArray = new Object[bulkSize == -1 ? bucketSize : bulkSize];
     }
@@ -51,30 +48,15 @@ public abstract class SingleProcessorQueue {
     }
 
     public int getSize() {
-        lock.lock();
-        try {
-            return size;
-        } finally {
-            lock.unlock();
-        }
+        return size;
     }
 
     public boolean isClosed() {
-        lock.lock();
-        try {
-            return closed;
-        } finally {
-            lock.unlock();
-        }
+        return closed;
     }
 
     public boolean isStarted() {
-        lock.lock();
-        try {
-            return started;
-        } finally {
-            lock.unlock();
-        }
+        return started;
     }
 
     private void doEnqueue(Object obj) {
@@ -97,24 +79,23 @@ public abstract class SingleProcessorQueue {
     }
 
     public void enqueue(Object obj) {
-        lock.lock();
+        lock.writeLock().lock();
         try {
             if (closed)
                 return;
-//      System.out.println(this+": enqueue");
             doEnqueue(obj);
             if (!processorActive && started) {
                 startProcessor();
                 processorActive = true;
             }
         } finally {
-            lock.unlock();
+            lock.writeLock().unlock();
         }
     }
 
     public boolean dequeue() {
         int n = 0;
-        lock.lock();
+        lock.writeLock().lock();
         try {
             if (closed || !started || size == 0) {
                 processorActive = false;
@@ -122,20 +103,19 @@ public abstract class SingleProcessorQueue {
             }
             n = getBulk();
         } finally {
-            lock.unlock();
+            lock.writeLock().unlock();
         }
-//    System.out.println(this+": dequeue, n="+n);
         process(bulkWrapper, n);
         clearBulk();
-        boolean rc = true;
-        lock.lock();
+        boolean rc;
+        lock.writeLock().lock();
         try {
             if (size == 0) {
                 processorActive = false;
             }
             rc = size > 0;
         } finally {
-            lock.unlock();
+            lock.writeLock().unlock();
         }
         return rc;
     }
@@ -163,7 +143,7 @@ public abstract class SingleProcessorQueue {
     protected abstract void process(Object[] bulk, int n);
 
     public void startQueue() {
-        lock.lock();
+        lock.writeLock().lock();
         try {
             closed = false;
             started = true;
@@ -172,16 +152,16 @@ public abstract class SingleProcessorQueue {
                 processorActive = true;
             }
         } finally {
-            lock.unlock();
+            lock.writeLock().unlock();
         }
     }
 
     public void stopQueue() {
-        lock.lock();
+        lock.writeLock().lock();
         try {
             started = false;
         } finally {
-            lock.unlock();
+            lock.writeLock().unlock();
         }
     }
 
@@ -190,7 +170,7 @@ public abstract class SingleProcessorQueue {
     }
 
     public void clear() {
-        lock.lock();
+        lock.writeLock().lock();
         try {
             int n = 0;
             for (int i = 0; i < elements.length; i++) {
@@ -219,17 +199,17 @@ public abstract class SingleProcessorQueue {
                 first = 0;
             }
         } finally {
-            lock.unlock();
+            lock.writeLock().unlock();
         }
     }
 
     public void close() {
-        lock.lock();
+        lock.writeLock().lock();
         try {
             closed = true;
             elements = null;
         } finally {
-            lock.unlock();
+            lock.writeLock().unlock();
         }
     }
 }

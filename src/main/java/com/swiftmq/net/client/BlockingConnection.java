@@ -33,6 +33,7 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class BlockingConnection extends Thread
         implements Connection, ChunkListener, OutputListener {
@@ -57,6 +58,7 @@ public class BlockingConnection extends Thread
     boolean closed = false;
     int sndBufferSize = 8192;
     AtomicBoolean inputActiveIndicator = null;
+    ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
     public BlockingConnection(Socket socket, InboundHandler inboundHandler, ExceptionHandler exceptionHandler) throws IOException {
         this(socket, 128 * 1024, 64 * 1024, 128 * 1024, 64 * 1024);
@@ -130,9 +132,15 @@ public class BlockingConnection extends Thread
         this.inputActiveIndicator = inputActiveIndicator;
     }
 
-    public synchronized void chunkCompleted(byte[] b, int offset, int len) {
-        dis.setBuffer(b, offset, len);
-        inboundHandler.dataAvailable(dis);
+    public void chunkCompleted(byte[] b, int offset, int len) {
+        lock.writeLock().lock();
+        try {
+            dis.setBuffer(b, offset, len);
+            inboundHandler.dataAvailable(dis);
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     public int performWrite(byte[] b, int offset, int len)
@@ -165,8 +173,14 @@ public class BlockingConnection extends Thread
         }
     }
 
-    public synchronized void setInboundHandler(InboundHandler inboundHandler) {
-        this.inboundHandler = inboundHandler;
+    public void setInboundHandler(InboundHandler inboundHandler) {
+        lock.writeLock().lock();
+        try {
+            this.inboundHandler = inboundHandler;
+        } finally {
+            lock.writeLock().unlock();
+        }
+
     }
 
     public void setExceptionHandler(ExceptionHandler exceptionHandler) {

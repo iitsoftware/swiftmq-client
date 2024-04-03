@@ -20,7 +20,11 @@ package com.swiftmq.admin.cli;
 import com.swiftmq.admin.cli.event.RouterListener;
 import com.swiftmq.admin.mgmt.*;
 import com.swiftmq.jms.ReconnectListener;
-import com.swiftmq.mgmt.*;
+import com.swiftmq.mgmt.Command;
+import com.swiftmq.mgmt.CommandExecutor;
+import com.swiftmq.mgmt.CommandRegistry;
+import com.swiftmq.mgmt.TreeCommands;
+import com.swiftmq.tools.collection.ConcurrentList;
 import com.swiftmq.tools.concurrent.Semaphore;
 import com.swiftmq.tools.requestreply.RequestService;
 import com.swiftmq.util.SwiftUtilities;
@@ -35,6 +39,9 @@ import javax.naming.InitialContext;
 import java.io.*;
 import java.net.InetAddress;
 import java.util.*;
+import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 
 /**
  * CLI is SwiftMQ's command line interface.
@@ -74,287 +81,258 @@ import java.util.*;
  */
 public class CLI implements ReconnectListener {
     private static String INIT_FILE_PROP = "swiftmq.cli.init";
-    private static String DEFAULT_INIT_FILE = System.getProperty("user.home") + File.separatorChar + ".init.cli";
+    private static final String DEFAULT_INIT_FILE = System.getProperty("user.home") + File.separatorChar + ".init.cli";
     ConnectionHolder connectionHolder = null;
     LineReader inReader = null;
     //  BufferedReader inReader = new BufferedReader(new InputStreamReader(System.in));
     BufferedReader scriptReader = null;
     boolean programmatic = false;
-    Object waitSem = new Object();
-    Object closeSem = new Object();
-    String waitFor = null;
-    Vector listeners = new Vector();
-
-    Set availableRouters = Collections.synchronizedSet(new TreeSet());
+    Semaphore waitSem = new Semaphore();
+    volatile String waitFor = null;
+    List<RouterListener> listeners = new ConcurrentList<>(new ArrayList<>());
+    Set<String> availableRouters = ConcurrentHashMap.newKeySet();
     CommandRegistry commandRegistry = new CommandRegistry("CLI shell", null);
     Endpoint actRouter = null;
     EndpointRegistry endpointRegistry = new EndpointRegistry();
-    Map aliases = (Map) Collections.synchronizedMap(new TreeMap());
+    Map<String, String> aliases = new ConcurrentSkipListMap<>();
+    ;
     PrintWriter outWriter = null;
     boolean reconnected = false;
     boolean substitute = false;
     boolean verbose = false;
-    Map vars = new HashMap();
+    Map<String, String> vars = new ConcurrentHashMap<>();
 
     Semaphore waitForRouters = new Semaphore();
 
     private CLI() {
-        CommandExecutor exitExecutor = new CommandExecutor() {
-            public String[] execute(String[] context, Entity entity, String[] cmd) {
-                if (cmd.length != 1)
-                    return new String[]{TreeCommands.ERROR, "Invalid command, please try 'exit'"};
-                close();
-                System.exit(-1);
-                return null;
-            }
+        CommandExecutor exitExecutor = (context, entity, cmd) -> {
+            if (cmd.length != 1)
+                return new String[]{TreeCommands.ERROR, "Invalid command, please try 'exit'"};
+            close();
+            System.exit(-1);
+            return null;
         };
         Command exitCommand = new Command("exit", "exit", "Exit CLI", true, exitExecutor);
         commandRegistry.addCommand(exitCommand);
-        CommandExecutor switchExecutor = new CommandExecutor() {
-            public String[] execute(String[] context, Entity entity, String[] cmd) {
-                if (cmd.length != 2)
-                    return new String[]{TreeCommands.ERROR, "Invalid command, please try 'sr <router>'"};
-                if (availableRouters.contains(cmd[1])) {
-                    try {
-                        Endpoint routerContext = endpointRegistry.get(cmd[1]);
-                        if (routerContext == null)
-                            routerContext = createEndpoint(cmd[1], false);
-                        actRouter = routerContext;
-                        commandRegistry.setDefaultCommand(actRouter);
-                        vars.put("routername", cmd[1]);
-                    } catch (Exception e) {
-                        return new String[]{TreeCommands.ERROR, e.toString()};
-                    }
-                    return null;
+        CommandExecutor switchExecutor = (context, entity, cmd) -> {
+            if (cmd.length != 2)
+                return new String[]{TreeCommands.ERROR, "Invalid command, please try 'sr <router>'"};
+            if (availableRouters.contains(cmd[1])) {
+                try {
+                    Endpoint routerContext = endpointRegistry.get(cmd[1]);
+                    if (routerContext == null)
+                        routerContext = createEndpoint(cmd[1], false);
+                    actRouter = routerContext;
+                    commandRegistry.setDefaultCommand(actRouter);
+                    vars.put("routername", cmd[1]);
+                } catch (Exception e) {
+                    return new String[]{TreeCommands.ERROR, e.toString()};
                 }
-                return new String[]{TreeCommands.ERROR, "Router '" + cmd[1] + "' is unknown."};
+                return null;
             }
+            return new String[]{TreeCommands.ERROR, "Router '" + cmd[1] + "' is unknown."};
         };
         Command switchCommand = new Command("sr", "sr <router>", "Switch to Router <router>", true, switchExecutor);
         commandRegistry.addCommand(switchCommand);
-        CommandExecutor availExecutor = new CommandExecutor() {
-            public String[] execute(String[] context, Entity entity, String[] cmd) {
-                if (cmd.length != 1)
-                    return new String[]{TreeCommands.ERROR, "Invalid command, please try 'ar'"};
-                ArrayList al = new ArrayList();
-                al.add(TreeCommands.RESULT);
-                al.add("Available Routers:");
-                al.add("");
-                String[] s = (String[]) availableRouters.toArray(new String[availableRouters.size()]);
-                for (int i = 0; i < s.length; i++)
-                    al.add(s[i]);
-                al.add("");
-                return (String[]) al.toArray(new String[al.size()]);
-            }
+        CommandExecutor availExecutor = (context, entity, cmd) -> {
+            if (cmd.length != 1)
+                return new String[]{TreeCommands.ERROR, "Invalid command, please try 'ar'"};
+            ArrayList al = new ArrayList();
+            al.add(TreeCommands.RESULT);
+            al.add("Available Routers:");
+            al.add("");
+            String[] s = (String[]) availableRouters.toArray(new String[availableRouters.size()]);
+            for (int i = 0; i < s.length; i++)
+                al.add(s[i]);
+            al.add("");
+            return (String[]) al.toArray(new String[al.size()]);
         };
         Command availCommand = new Command("ar", "ar", "Show all available Routers", true, availExecutor);
         commandRegistry.addCommand(availCommand);
-        CommandExecutor wrExecutor = new CommandExecutor() {
-            public String[] execute(String[] context, Entity entity, String[] cmd) {
-                if (cmd.length < 2 || cmd.length > 3)
-                    return new String[]{TreeCommands.ERROR, "Invalid command, please try 'wr <router> [<timeout millisecs>]'"};
-                if (cmd.length == 2)
-                    waitForRouter(cmd[1]);
-                else
-                    waitForRouter(cmd[1], Long.valueOf(cmd[2]));
-                return null;
-            }
+        CommandExecutor wrExecutor = (context, entity, cmd) -> {
+            if (cmd.length < 2 || cmd.length > 3)
+                return new String[]{TreeCommands.ERROR, "Invalid command, please try 'wr <router> [<timeout millisecs>]'"};
+            if (cmd.length == 2)
+                waitForRouter(cmd[1]);
+            else
+                waitForRouter(cmd[1], Long.valueOf(cmd[2]));
+            return null;
         };
         Command wrCommand = new Command("wr", "wr <router> [<timeout millisecs>]", "Wait for availability of router <router>", true, wrExecutor);
         commandRegistry.addCommand(wrCommand);
-        CommandExecutor substituteExecutor = new CommandExecutor() {
-            public String[] execute(String[] context, Entity entity, String[] cmd) {
-                if (cmd.length != 2)
-                    return new String[]{TreeCommands.ERROR, "Invalid command, please try 'substitute on | off'"};
-                if (cmd[1].equals("on"))
-                    substitute = true;
-                else if (cmd[1].equals("off"))
-                    substitute = false;
-                else
-                    return new String[]{TreeCommands.ERROR, "Invalid command, please try 'substitute on | off'"};
-                return null;
-            }
+        CommandExecutor substituteExecutor = (context, entity, cmd) -> {
+            if (cmd.length != 2)
+                return new String[]{TreeCommands.ERROR, "Invalid command, please try 'substitute on | off'"};
+            if (cmd[1].equals("on"))
+                substitute = true;
+            else if (cmd[1].equals("off"))
+                substitute = false;
+            else
+                return new String[]{TreeCommands.ERROR, "Invalid command, please try 'substitute on | off'"};
+            return null;
         };
         Command substituteCommand = new Command("substitute", "substitute on | off", "Substitutes variables in a command", true, substituteExecutor);
         commandRegistry.addCommand(substituteCommand);
-        CommandExecutor verboseExecutor = new CommandExecutor() {
-            public String[] execute(String[] context, Entity entity, String[] cmd) {
-                if (cmd.length != 2)
-                    return new String[]{TreeCommands.ERROR, "Invalid command, please try 'verbose on | off'"};
-                if (cmd[1].equals("on"))
-                    verbose = true;
-                else if (cmd[1].equals("off"))
-                    verbose = false;
-                else
-                    return new String[]{TreeCommands.ERROR, "Invalid command, please try 'verbose on | off'"};
-                return null;
-            }
+        CommandExecutor verboseExecutor = (context, entity, cmd) -> {
+            if (cmd.length != 2)
+                return new String[]{TreeCommands.ERROR, "Invalid command, please try 'verbose on | off'"};
+            if (cmd[1].equals("on"))
+                verbose = true;
+            else if (cmd[1].equals("off"))
+                verbose = false;
+            else
+                return new String[]{TreeCommands.ERROR, "Invalid command, please try 'verbose on | off'"};
+            return null;
         };
         Command verboseCommand = new Command("verbose", "verbose on | off", "Displays each CLI script command before execution", true, verboseExecutor);
         commandRegistry.addCommand(verboseCommand);
-        CommandExecutor outputExecutor = new CommandExecutor() {
-            public String[] execute(String[] context, Entity entity, String[] cmd) {
-                if (cmd.length != 2)
-                    return new String[]{TreeCommands.ERROR, "Invalid command, please try 'output <filename> | console'"};
-                try {
-                    if (cmd[1].equals("console"))
-                        outWriter = null;
-                    else {
-                        File f = new File(cmd[1]);
-                        if (f.exists())
-                            f.delete();
-                        outWriter = new PrintWriter(new FileWriter(f), true);
-                    }
-                } catch (IOException e) {
-                    return new String[]{TreeCommands.ERROR, e.getMessage()};
+        CommandExecutor outputExecutor = (context, entity, cmd) -> {
+            if (cmd.length != 2)
+                return new String[]{TreeCommands.ERROR, "Invalid command, please try 'output <filename> | console'"};
+            try {
+                if (cmd[1].equals("console"))
+                    outWriter = null;
+                else {
+                    File f = new File(cmd[1]);
+                    if (f.exists())
+                        f.delete();
+                    outWriter = new PrintWriter(new FileWriter(f), true);
                 }
-                return null;
+            } catch (IOException e) {
+                return new String[]{TreeCommands.ERROR, e.getMessage()};
             }
+            return null;
         };
         Command outputCommand = new Command("output", "output <filename> | console", "Redirect result output", true, outputExecutor);
         commandRegistry.addCommand(outputCommand);
-        CommandExecutor echoExecutor = new CommandExecutor() {
-            public String[] execute(String[] context, Entity entity, String[] cmd) {
-                StringBuffer b = new StringBuffer("");
-                if (cmd.length > 1) {
-                    for (int i = 1; i < cmd.length; i++) {
-                        if (i != 1)
-                            b.append(' ');
-                        b.append(cmd[i]);
-                    }
-                }
-                return new String[]{TreeCommands.RESULT, b.toString()};
-            }
-        };
-        Command echoCommand = new Command("echo", "echo [<message>]", "Echos a message", true, echoExecutor);
-        commandRegistry.addCommand(echoCommand);
-        CommandExecutor varExecutor = new CommandExecutor() {
-            public String[] execute(String[] context, Entity entity, String[] cmd) {
-                if (cmd.length > 3)
-                    return new String[]{TreeCommands.ERROR, "Invalid command, please try 'var [<variable> [<value>]]'"};
-                if (cmd.length == 3)
-                    vars.put(cmd[1], cmd[2]);
-                else if (cmd.length == 2)
-                    vars.remove(cmd[1]);
-                else {
-                    for (Iterator iter = vars.entrySet().iterator(); iter.hasNext(); ) {
-                        Map.Entry entry = (Map.Entry) iter.next();
-                        System.out.println(entry.getKey() + "=" + entry.getValue());
-                    }
-                }
-                return null;
-            }
-        };
-        Command varCommand = new Command("var", "var [<variable> [<value>]]", "Lists, sets or deletes variables", true, varExecutor);
-        commandRegistry.addCommand(varCommand);
-        CommandExecutor asetExecutor = new CommandExecutor() {
-            public String[] execute(String[] context, Entity entity, String[] cmd) {
-                if (cmd.length < 3)
-                    return new String[]{TreeCommands.ERROR, "Invalid command, please try 'aset <alias> <command>'"};
-                String alias = cmd[1];
-                StringBuffer b = new StringBuffer();
-                for (int i = 2; i < cmd.length; i++) {
-                    if (i != 2)
+        CommandExecutor echoExecutor = (context, entity, cmd) -> {
+            StringBuffer b = new StringBuffer("");
+            if (cmd.length > 1) {
+                for (int i = 1; i < cmd.length; i++) {
+                    if (i != 1)
                         b.append(' ');
                     b.append(cmd[i]);
                 }
-                aliases.put(alias, b.toString());
-                return null;
             }
+            return new String[]{TreeCommands.RESULT, b.toString()};
+        };
+        Command echoCommand = new Command("echo", "echo [<message>]", "Echos a message", true, echoExecutor);
+        commandRegistry.addCommand(echoCommand);
+        CommandExecutor varExecutor = (context, entity, cmd) -> {
+            if (cmd.length > 3)
+                return new String[]{TreeCommands.ERROR, "Invalid command, please try 'var [<variable> [<value>]]'"};
+            if (cmd.length == 3)
+                vars.put(cmd[1], cmd[2]);
+            else if (cmd.length == 2)
+                vars.remove(cmd[1]);
+            else {
+                for (Iterator iter = vars.entrySet().iterator(); iter.hasNext(); ) {
+                    Map.Entry entry = (Map.Entry) iter.next();
+                    System.out.println(entry.getKey() + "=" + entry.getValue());
+                }
+            }
+            return null;
+        };
+        Command varCommand = new Command("var", "var [<variable> [<value>]]", "Lists, sets or deletes variables", true, varExecutor);
+        commandRegistry.addCommand(varCommand);
+        CommandExecutor asetExecutor = (context, entity, cmd) -> {
+            if (cmd.length < 3)
+                return new String[]{TreeCommands.ERROR, "Invalid command, please try 'aset <alias> <command>'"};
+            String alias = cmd[1];
+            StringBuffer b = new StringBuffer();
+            for (int i = 2; i < cmd.length; i++) {
+                if (i != 2)
+                    b.append(' ');
+                b.append(cmd[i]);
+            }
+            aliases.put(alias, b.toString());
+            return null;
         };
         Command asetCommand = new Command("aset", "aset <alias> <command>", "Set a command alias", true, asetExecutor);
         commandRegistry.addCommand(asetCommand);
-        CommandExecutor adelExecutor = new CommandExecutor() {
-            public String[] execute(String[] context, Entity entity, String[] cmd) {
-                if (cmd.length != 2)
-                    return new String[]{TreeCommands.ERROR, "Invalid command, please try 'adel <alias>'"};
-                aliases.remove(cmd[1]);
-                return null;
-            }
+        CommandExecutor adelExecutor = (context, entity, cmd) -> {
+            if (cmd.length != 2)
+                return new String[]{TreeCommands.ERROR, "Invalid command, please try 'adel <alias>'"};
+            aliases.remove(cmd[1]);
+            return null;
         };
         Command adelCommand = new Command("adel", "adel <alias>", "Remove a command alias", true, adelExecutor);
         commandRegistry.addCommand(adelCommand);
-        CommandExecutor alistExecutor = new CommandExecutor() {
-            public String[] execute(String[] context, Entity entity, String[] cmd) {
-                if (cmd.length > 2)
-                    return new String[]{TreeCommands.ERROR, "Invalid command, please try 'alist [<alias>]'"};
-                System.out.println();
-                StringBuffer b = new StringBuffer();
-                b.append(SwiftUtilities.fillToLength("Alias", 33));
-                b.append("Command");
-                System.out.println(b.toString());
-                System.out.println(SwiftUtilities.fillLeft("", 72, '-'));
-                if (cmd.length == 2) {
-                    String value = (String) aliases.get(cmd[1]);
-                    if (value == null)
-                        System.out.println("Alias not defined.");
-                    else {
-                        StringBuffer s = new StringBuffer();
-                        s.append(SwiftUtilities.fillToLength(cmd[1], 33));
-                        s.append(value);
-                        System.out.println(s.toString());
-                    }
-                } else {
-                    if (aliases.size() == 0)
-                        System.out.println("No aliases defined.");
-                    else {
-                        for (Iterator iter = aliases.keySet().iterator(); iter.hasNext(); ) {
-                            String key = (String) iter.next();
-                            String value = (String) aliases.get(key);
-                            StringBuffer s = new StringBuffer();
-                            s.append(SwiftUtilities.fillToLength(key, 33));
-                            s.append(value);
-                            System.out.println(s.toString());
-
-                        }
-                    }
+        CommandExecutor alistExecutor = (context, entity, cmd) -> {
+            if (cmd.length > 2)
+                return new String[]{TreeCommands.ERROR, "Invalid command, please try 'alist [<alias>]'"};
+            System.out.println();
+            StringBuffer b = new StringBuffer();
+            b.append(SwiftUtilities.fillToLength("Alias", 33));
+            b.append("Command");
+            System.out.println(b.toString());
+            System.out.println(SwiftUtilities.fillLeft("", 72, '-'));
+            if (cmd.length == 2) {
+                String value = (String) aliases.get(cmd[1]);
+                if (value == null)
+                    System.out.println("Alias not defined.");
+                else {
+                    StringBuffer s = new StringBuffer();
+                    s.append(SwiftUtilities.fillToLength(cmd[1], 33));
+                    s.append(value);
+                    System.out.println(s.toString());
                 }
-                System.out.println();
-                return null;
-            }
-        };
-        Command alistCommand = new Command("alist", "alist [<alias>]", "List one or all alias(es)", true, alistExecutor);
-        commandRegistry.addCommand(alistCommand);
-        CommandExecutor asaveExecutor = new CommandExecutor() {
-            public String[] execute(String[] context, Entity entity, String[] cmd) {
-                if (cmd.length > 2)
-                    return new String[]{TreeCommands.ERROR, "Invalid command, please try 'execute [<filename>]'"};
-                String filename = null;
-                if (cmd.length == 2)
-                    filename = cmd[1];
-                else
-                    filename = System.getProperty("user.home") + File.separatorChar + ".init.cli";
-                System.out.println("Saving aliases to file: " + filename);
-                try {
-                    PrintWriter pw = new PrintWriter(new FileWriter(filename));
-                    pw.println("# CLI aliases, saved: " + new Date());
+            } else {
+                if (aliases.size() == 0)
+                    System.out.println("No aliases defined.");
+                else {
                     for (Iterator iter = aliases.keySet().iterator(); iter.hasNext(); ) {
                         String key = (String) iter.next();
                         String value = (String) aliases.get(key);
-                        pw.println("aset " + key + " " + value);
+                        StringBuffer s = new StringBuffer();
+                        s.append(SwiftUtilities.fillToLength(key, 33));
+                        s.append(value);
+                        System.out.println(s.toString());
+
                     }
-                    pw.flush();
-                    pw.close();
-                } catch (IOException e) {
-                    return new String[]{TreeCommands.ERROR, "Unable to saves aliases, exception = " + e};
                 }
-                return null;
             }
+            System.out.println();
+            return null;
+        };
+        Command alistCommand = new Command("alist", "alist [<alias>]", "List one or all alias(es)", true, alistExecutor);
+        commandRegistry.addCommand(alistCommand);
+        CommandExecutor asaveExecutor = (context, entity, cmd) -> {
+            if (cmd.length > 2)
+                return new String[]{TreeCommands.ERROR, "Invalid command, please try 'execute [<filename>]'"};
+            String filename = null;
+            if (cmd.length == 2)
+                filename = cmd[1];
+            else
+                filename = System.getProperty("user.home") + File.separatorChar + ".init.cli";
+            System.out.println("Saving aliases to file: " + filename);
+            try {
+                PrintWriter pw = new PrintWriter(new FileWriter(filename));
+                pw.println("# CLI aliases, saved: " + new Date());
+                for (Iterator iter = aliases.keySet().iterator(); iter.hasNext(); ) {
+                    String key = (String) iter.next();
+                    String value = (String) aliases.get(key);
+                    pw.println("aset " + key + " " + value);
+                }
+                pw.flush();
+                pw.close();
+            } catch (IOException e) {
+                return new String[]{TreeCommands.ERROR, "Unable to saves aliases, exception = " + e};
+            }
+            return null;
         };
         Command asaveCommand = new Command("asave", "asave [<filename>]", "Saves all aliases into a file", true, asaveExecutor);
         commandRegistry.addCommand(asaveCommand);
-        CommandExecutor executeExecutor = new CommandExecutor() {
-            public String[] execute(String[] context, Entity entity, String[] cmd) {
-                if (cmd.length != 2)
-                    return new String[]{TreeCommands.ERROR, "Invalid command, please try 'execute <filename>'"};
-                String filename = cmd[1];
-                try {
-                    executeScript(filename);
-                } catch (Exception e) {
-                    return new String[]{TreeCommands.ERROR, "Unable to execute " + filename + ", exception = " + e};
-                }
-                return null;
+        CommandExecutor executeExecutor = (context, entity, cmd) -> {
+            if (cmd.length != 2)
+                return new String[]{TreeCommands.ERROR, "Invalid command, please try 'execute <filename>'"};
+            String filename = cmd[1];
+            try {
+                executeScript(filename);
+            } catch (Exception e) {
+                return new String[]{TreeCommands.ERROR, "Unable to execute " + filename + ", exception = " + e};
             }
+            return null;
         };
         Command executeCommand = new Command("execute", "execute <filename>", "Executes a CLI script", true, executeExecutor);
         commandRegistry.addCommand(executeCommand);
@@ -554,18 +532,16 @@ public class CLI implements ReconnectListener {
      * @param routerName router name
      */
     public void waitForRouter(String routerName) {
-        synchronized (waitSem) {
-            waitFor = routerName;
-            if (!availableRouters.contains(routerName)) {
-                try {
-                    if (!programmatic)
-                        System.out.println("Waiting for router '" + routerName + "'");
-                    waitSem.wait();
-                } catch (Exception ignored) {
-                }
+        waitFor = routerName;
+        if (!availableRouters.contains(routerName)) {
+            try {
+                if (!programmatic)
+                    System.out.println("Waiting for router '" + routerName + "'");
+                waitSem.waitHere();
+            } catch (Exception ignored) {
             }
-            waitFor = null;
         }
+        waitFor = null;
     }
 
     /**
@@ -577,18 +553,16 @@ public class CLI implements ReconnectListener {
      * @param timeout    timeout value in milliseconds
      */
     public void waitForRouter(String routerName, long timeout) {
-        synchronized (waitSem) {
-            waitFor = routerName;
-            if (!availableRouters.contains(routerName)) {
-                try {
-                    if (!programmatic)
-                        System.out.println("Waiting for router '" + routerName + "' with timeout " + timeout + " ms");
-                    waitSem.wait(timeout);
-                } catch (Exception ignored) {
-                }
+        waitFor = routerName;
+        if (!availableRouters.contains(routerName)) {
+            try {
+                if (!programmatic)
+                    System.out.println("Waiting for router '" + routerName + "' with timeout " + timeout + " ms");
+                waitSem.waitHere(timeout);
+            } catch (Exception ignored) {
             }
-            waitFor = null;
         }
+        waitFor = null;
     }
 
     /**
@@ -635,8 +609,8 @@ public class CLI implements ReconnectListener {
         String[] result = cmd;
         if (substitute) {
             for (int i = 0; i < result.length; i++) {
-                for (Iterator iter = vars.entrySet().iterator(); iter.hasNext(); ) {
-                    Map.Entry entry = (Map.Entry) iter.next();
+                for (Map.Entry<String, String> stringStringEntry : vars.entrySet()) {
+                    Entry entry = (Map.Entry) stringStringEntry;
                     String name = (String) entry.getKey();
                     String value = (String) entry.getValue();
                     result[i] = SwiftUtilities.substitute(result[i], name, value);
@@ -682,7 +656,7 @@ public class CLI implements ReconnectListener {
      * @param l router listener
      */
     public void addRouterListener(RouterListener l) {
-        listeners.addElement(l);
+        listeners.add(l);
     }
 
     /**
@@ -691,14 +665,12 @@ public class CLI implements ReconnectListener {
      * @param l router listener
      */
     public void removeRouterListener(RouterListener l) {
-        listeners.removeElement(l);
+        listeners.remove(l);
     }
 
     private void fireRouterEvent(String routerName, boolean available) {
-        synchronized (listeners) {
-            for (int i = 0; i < listeners.size(); i++) {
-                ((RouterListener) listeners.elementAt(i)).onRouterEvent(routerName, available);
-            }
+        for (int i = 0; i < listeners.size(); i++) {
+            (listeners.get(i)).onRouterEvent(routerName, available);
         }
     }
 
@@ -709,10 +681,8 @@ public class CLI implements ReconnectListener {
     public void markRouter(String routerName, boolean available) {
         if (available) {
             availableRouters.add(routerName);
-            synchronized (waitSem) {
-                if (waitFor != null && waitFor.equals(routerName))
-                    waitSem.notify();
-            }
+            if (waitFor != null && waitFor.equals(routerName))
+                waitSem.notifySingleWaiter();
             if (programmatic) {
                 fireRouterEvent(routerName, true);
             } else {
@@ -734,7 +704,7 @@ public class CLI implements ReconnectListener {
             public RequestService createRequestService(int protocolVersion) {
                 if (protocolVersion == 750)
                     return new com.swiftmq.admin.cli.v750.RequestProcessor(CLI.this);
-                return new com.swiftmq.admin.cli.v400.RequestProcessor(CLI.this);
+                throw new RuntimeException("Invalid protocol version: " + protocolVersion);
             }
         }, programmatic);
         endpoint.setRouteInfos(routeInfos);

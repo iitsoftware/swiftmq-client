@@ -17,43 +17,87 @@
 
 package com.swiftmq.tools.util;
 
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+
 public class UninterruptableWaiter {
-    public static void doWait(Object waiter) {
-        boolean wasInterrupted = Thread.interrupted();
-        boolean ok = false;
-        do {
-            try {
-                waiter.wait();
-                ok = true;
-            } catch (InterruptedException e) {
-                ok = false;
-                wasInterrupted = true;
-            }
-        } while (!ok);
-        if (wasInterrupted)
-            Thread.currentThread().interrupt();
+    private final Lock lock;
+    private final Condition condition;
+    private boolean signalled = false;
+
+    public UninterruptableWaiter(Lock lock) {
+        this.lock = lock;
+        this.condition = lock.newCondition();
     }
 
-    public static void doWait(Object waiter, long timeout) {
+    public void doWait() {
+        lock.lock();
+        try {
+            boolean wasInterrupted = Thread.interrupted();
+            while (!signalled) {
+                try {
+                    condition.await();
+                    if (signalled) {
+                        break; // Exit loop if signalled
+                    }
+                } catch (InterruptedException e) {
+                    wasInterrupted = true;
+                    // Continue waiting - do not exit loop
+                }
+            }
+            if (wasInterrupted) {
+                Thread.currentThread().interrupt(); // Restore interruption status
+            }
+        } finally {
+            signalled = false; // Reset signal flag
+            lock.unlock();
+        }
+    }
+
+    public void doWait(long timeout) {
         if (timeout == 0) {
-            doWait(waiter);
+            doWait();
             return;
         }
-        boolean wasInterrupted = Thread.interrupted();
-        boolean ok = false;
-        do {
-            long start = System.currentTimeMillis();
-            try {
-                waiter.wait(timeout);
-                ok = true;
-            } catch (InterruptedException e) {
-                long delta = System.currentTimeMillis() - start;
-                timeout -= delta;
-                ok = timeout <= 0;
-                wasInterrupted = true;
+        lock.lock();
+        try {
+            boolean wasInterrupted = Thread.interrupted();
+            long nanos = TimeUnit.MILLISECONDS.toNanos(timeout);
+            while (!signalled && nanos > 0L) {
+                try {
+                    nanos = condition.awaitNanos(nanos);
+                } catch (InterruptedException e) {
+                    wasInterrupted = true;
+                    // Continue waiting - do not exit loop
+                }
             }
-        } while (!ok);
-        if (wasInterrupted)
-            Thread.currentThread().interrupt();
+            if (wasInterrupted) {
+                Thread.currentThread().interrupt(); // Restore interruption status
+            }
+        } finally {
+            signalled = false; // Reset signal flag
+            lock.unlock();
+        }
+    }
+
+    public void signal() {
+        lock.lock();
+        try {
+            signalled = true;
+            condition.signal();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public void signalAll() {
+        lock.lock();
+        try {
+            signalled = true;
+            condition.signalAll();
+        } finally {
+            lock.unlock();
+        }
     }
 }

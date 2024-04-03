@@ -24,10 +24,9 @@ import com.swiftmq.amqp.v100.generated.transport.definitions.Error;
 import com.swiftmq.tools.concurrent.Semaphore;
 import com.swiftmq.tools.pipeline.POObject;
 
-import java.util.HashSet;
 import java.util.Set;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * A Session, created from a Connection.
@@ -42,9 +41,9 @@ public class Session {
     long incomingWindowSize = 1;
     long outgoingWindowSize = 1;
     SessionDispatcher sessionDispatcher = null;
-    TransactionController transactionController = null;
-    Set links = new HashSet();
-    Lock lock = new ReentrantLock();
+    volatile TransactionController transactionController = null;
+    Set<Link> links = ConcurrentHashMap.newKeySet();
+    ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
     volatile boolean closed = false;
     Error error = null;
 
@@ -295,12 +294,7 @@ public class Session {
     }
 
     protected void detach(Link link) {
-        try {
-            lock.lock();
             links.remove(link);
-        } finally {
-            lock.unlock();
-        }
     }
 
     /**
@@ -309,7 +303,7 @@ public class Session {
      * @return transaction controller
      * @throws SessionClosedException if the session is closed
      */
-    public synchronized TransactionController getTransactionController() throws SessionClosedException {
+    public TransactionController getTransactionController() throws SessionClosedException {
         verifyState();
         if (transactionController == null)
             transactionController = new TransactionController(this);
@@ -326,15 +320,9 @@ public class Session {
     }
 
     private Link[] getLinksCopy() {
-        try {
-            lock.lock();
-            Link[] l = null;
-            l = (Link[]) links.toArray(new Link[links.size()]);
+        Link[] l = links.toArray(new Link[links.size()]);
             links.clear();
             return l;
-        } finally {
-            lock.unlock();
-        }
     }
 
     protected void cancel() {
@@ -342,8 +330,8 @@ public class Session {
             return;
         if (links.size() > 0) {
             Link[] l = getLinksCopy();
-            for (int i = 0; i < l.length; i++)
-                l[i].cancel();
+            for (Link link : l)
+                link.cancel();
         }
         myConnection.removeSession(this);
         myConnection.unmapSessionFromRemoteChannel(remoteChannel);
@@ -357,19 +345,14 @@ public class Session {
     public void close() {
         if (closed)
             return;
-        try {
-            lock.lock();
-            if (transactionController != null) {
-                transactionController.close();
-                transactionController = null;
-            }
-            Semaphore sem = new Semaphore();
-            POSendEnd po = new POSendEnd(sem, null);
-            sessionDispatcher.dispatch(po);
-            sem.waitHere();
-            cancel();
-        } finally {
-            lock.unlock();
+        if (transactionController != null) {
+            transactionController.close();
+            transactionController = null;
         }
+        Semaphore sem = new Semaphore();
+        POSendEnd po = new POSendEnd(sem, null);
+        sessionDispatcher.dispatch(po);
+        sem.waitHere();
+        cancel();
     }
 }

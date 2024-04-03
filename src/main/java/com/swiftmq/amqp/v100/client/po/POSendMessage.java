@@ -36,7 +36,7 @@ public class POSendMessage extends POObject {
     Producer producer;
     AMQPMessage message;
     TxnIdIF txnId;
-    DeliveryStateIF deliveryState = null;
+    volatile DeliveryStateIF deliveryState = null;
     DeliveryTag deliveryTag = null;
     Packager packager = new Packager();
     boolean recovery = false;
@@ -60,11 +60,11 @@ public class POSendMessage extends POObject {
         return producer;
     }
 
-    public synchronized DeliveryStateIF getDeliveryState() {
+    public DeliveryStateIF getDeliveryState() {
         return deliveryState;
     }
 
-    public synchronized void setDeliveryState(DeliveryStateIF deliveryState) {
+    public void setDeliveryState(DeliveryStateIF deliveryState) {
         this.deliveryState = deliveryState;
     }
 

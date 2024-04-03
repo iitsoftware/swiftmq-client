@@ -20,7 +20,8 @@ package com.swiftmq.swiftlet.trace;
 import com.swiftmq.swiftlet.Swiftlet;
 import com.swiftmq.swiftlet.SwiftletException;
 
-import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 
 /**
@@ -36,11 +37,7 @@ public abstract class TraceSwiftlet extends Swiftlet {
     public final static String SPACE_SWIFTLET = "swiftlet";
     public final static String SPACE_QUEUE = "queue";
     public final static String SPACE_PROTOCOL = "protocol";
-    /**
-     * @SBGen Collection of com.swiftmq.swiftlet.trace.TraceSpace
-     */
-    HashMap traceSpaces = new HashMap();
-    Object semaphore = new Object();
+    private final Map<String, TraceSpace> traceSpaces = new ConcurrentHashMap<>();
 
     /**
      * Get a trace space with that name.
@@ -49,12 +46,12 @@ public abstract class TraceSwiftlet extends Swiftlet {
      * @return always returns a valid trace space
      */
     public TraceSpace getTraceSpace(String spaceName) {
-        TraceSpace space = null;
-        synchronized (semaphore) {
-            space = (TraceSpace) traceSpaces.get(spaceName);
-            if (space == null) {
-                space = createTraceSpace(spaceName);
-                traceSpaces.put(spaceName, space);
+        TraceSpace space = traceSpaces.get(spaceName);
+        if (space == null) {
+            space = createTraceSpace(spaceName);
+            TraceSpace existing = traceSpaces.putIfAbsent(spaceName, space);
+            if (existing != null) {
+                space = existing;
             }
         }
         return space;

@@ -17,7 +17,11 @@
 
 package com.swiftmq.tools.timer;
 
-import java.util.*;
+import java.util.Calendar;
+import java.util.Map;
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * The TimerRegistry is a Singleton for managing Timers. The
@@ -32,8 +36,8 @@ import java.util.*;
  * @version 2.0
  */
 public class TimerRegistry {
-    Timer timer = new Timer(true);
-    Map listeners = new HashMap();
+    private final Timer timer = new Timer(true);
+    private final Map<TimerListener, TimerTask> listeners = new ConcurrentHashMap<>();
 
     private TimerRegistry() {
     }
@@ -113,38 +117,38 @@ public class TimerRegistry {
         return ms * 1000;
     }
 
-    public synchronized void addTimerListener(long delay, TimerListener l) {
+    public void addTimerListener(long delay, TimerListener l) {
         DelayExecutor exec = new DelayExecutor(delay, l);
         listeners.put(l, exec);
         timer.schedule(exec, delay, delay);
     }
 
-    public synchronized void addInstantTimerListener(long delay, TimerListener l) {
+    public void addInstantTimerListener(long delay, TimerListener l) {
         DelayExecutor exec = new DelayExecutor(delay, l);
         timer.schedule(exec, delay);
     }
 
-    public synchronized void addTimerListener(byte timePoint, TimerListener l) {
+    public void addTimerListener(byte timePoint, TimerListener l) {
         TimepointExecutor exec = new TimepointExecutor(timePoint, l);
         listeners.put(l, exec);
         timer.scheduleAtFixedRate(exec, computeDelay(timePoint), getTimepointMillis(timePoint));
     }
 
-    public synchronized void removeTimerListener(long delay, TimerListener l) {
+    public void removeTimerListener(long delay, TimerListener l) {
         TimerTask exec = (TimerTask) listeners.remove(l);
         if (exec != null) {
             exec.cancel();
         }
     }
 
-    public synchronized void removeTimerListener(byte timePoint, TimerListener l) {
+    public void removeTimerListener(byte timePoint, TimerListener l) {
         TimerTask exec = (TimerTask) listeners.remove(l);
         if (exec != null) {
             exec.cancel();
         }
     }
 
-    public synchronized void removeAllTimers() {
+    public void removeAllTimers() {
         timer.cancel();
     }
 

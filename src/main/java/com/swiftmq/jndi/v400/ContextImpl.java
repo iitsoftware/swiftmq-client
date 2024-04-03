@@ -36,17 +36,22 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class ContextImpl implements Context, java.io.Serializable, AutoCloseable, TimerListener {
     Hashtable env = null;
     JNDIInfo jndiInfo = null;
     ConnectionFactory cf = null;
-    Connection connection = null;
-    Session session = null;
-    MessageProducer producer = null;
-    boolean closed = true;
+    final AtomicReference<Connection> connection = new AtomicReference<>();
+    final AtomicReference<Session> session = new AtomicReference<>();
+    final AtomicReference<MessageProducer> producer = new AtomicReference<>();
+    final AtomicBoolean closed = new AtomicBoolean(true);
     boolean debug = false;
-    long lastAccessTime = 0;
+    final AtomicLong lastAccessTime = new AtomicLong();
+    ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
     public ContextImpl(Hashtable env)
             throws NamingException {
@@ -84,15 +89,15 @@ public class ContextImpl implements Context, java.io.Serializable, AutoCloseable
             createConnection();
             if (jndiInfo.getIdleclose() > 0)
                 TimerRegistry.Singleton().addTimerListener(1000, this);
-            closed = false;
+            closed.set(false);
         } catch (Exception e) {
-            if (connection != null) {
+            if (connection.get() != null) {
                 try {
-                    connection.close();
+                    connection.get().close();
                 } catch (Exception e1) {
                 }
             }
-            closed = true;
+            closed.set(true);
             if ((e instanceof JMSSecurityException) || (e instanceof InvalidVersionException))
                 throw new StopRetryException(e.getMessage());
             throw new NamingException("unable to connect, exception = " + e);
@@ -100,34 +105,36 @@ public class ContextImpl implements Context, java.io.Serializable, AutoCloseable
     }
 
     private void createConnection() throws JMSException {
-        connection = cf.createConnection(jndiInfo.getUsername(), jndiInfo.getPassword());
-        session = connection.createSession(false, 0);
-        producer = session.createProducer(null);
-        connection.start();
-        lastAccessTime = System.currentTimeMillis();
+        connection.set(cf.createConnection(jndiInfo.getUsername(), jndiInfo.getPassword()));
+        session.set(connection.get().createSession(false, 0));
+        producer.set(session.get().createProducer(null));
+        connection.get().start();
+        lastAccessTime.set(System.currentTimeMillis());
         if (debug)
             System.out.println(new Date() + " " + toString() + "/createConnection: " + env.get(Context.PROVIDER_URL));
     }
 
     private void checkConnection() throws JMSException {
-        if (!closed && connection == null)
-            createConnection();
-        lastAccessTime = System.currentTimeMillis();
+        lock.writeLock().lock();
+        try {
+            if (!closed.get() && connection.get() == null)
+                createConnection();
+            lastAccessTime.set(System.currentTimeMillis());
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
     @Override
-    public synchronized void performTimeAction(TimerEvent evt) {
-        long delta = System.currentTimeMillis() - lastAccessTime - jndiInfo.getIdleclose();
+    public void performTimeAction(TimerEvent evt) {
+        long delta = System.currentTimeMillis() - lastAccessTime.get() - jndiInfo.getIdleclose();
         if (debug)
             System.out.println(new Date() + " " + toString() + "/performTimeAction, connection=" + connection + ", delta=" + delta + ", lastAccessTime=" + lastAccessTime);
-        if (connection != null && lastAccessTime + jndiInfo.getIdleclose() < System.currentTimeMillis()) {
-            try {
-                if (debug)
-                    System.out.println(new Date() + " " + toString() + "/createConnection, close connection (idle close)");
-                connection.close();
-            } catch (JMSException ignored) {
-            }
-            connection = null;
+        if (connection.get() != null && lastAccessTime.get() + jndiInfo.getIdleclose() < System.currentTimeMillis()) {
+            if (debug)
+                System.out.println(new Date() + " " + toString() + "/createConnection, close connection (idle close)");
+            ((SwiftMQConnection) connection.get()).cancel(true);
+            connection.set(null);
         }
     }
 
@@ -150,22 +157,22 @@ public class ContextImpl implements Context, java.io.Serializable, AutoCloseable
         return msg;
     }
 
-    public synchronized void bind(String name, Object obj)
+    public void bind(String name, Object obj)
             throws NamingException {
-        if (closed)
+        if (closed.get())
             throw new NamingException("context is closed!");
         if (!(obj instanceof TemporaryTopicImpl || obj instanceof TemporaryQueueImpl))
             throw new OperationNotSupportedException("bind is only supported for TemporaryQueues/TemporaryTopics!");
         try {
             checkConnection();
-            TemporaryTopic tt = session.createTemporaryTopic();
-            MessageConsumer consumer = session.createConsumer(tt);
+            TemporaryTopic tt = session.get().createTemporaryTopic();
+            MessageConsumer consumer = session.get().createConsumer(tt);
 
             Versionable versionable = new Versionable();
             versionable.addVersioned(Versions.JNDI_CURRENT, createVersioned(Versions.JNDI_CURRENT, new BindRequest(name, (QueueImpl) obj)),
                     "com.swiftmq.jndi.protocol.v" + Versions.JNDI_CURRENT + ".JNDIRequestFactory");
             BytesMessage request = createMessage(versionable, tt);
-            producer.send(session.createTopic(JNDISwiftlet.JNDI_TOPIC), request, DeliveryMode.NON_PERSISTENT, MessageImpl.MAX_PRIORITY, 0);
+            producer.get().send(session.get().createTopic(JNDISwiftlet.JNDI_TOPIC), request, DeliveryMode.NON_PERSISTENT, MessageImpl.MAX_PRIORITY, 0);
             TextMessage reply = (TextMessage) consumer.receive();
             String text = reply.getText();
             consumer.close();
@@ -182,19 +189,19 @@ public class ContextImpl implements Context, java.io.Serializable, AutoCloseable
         throw new OperationNotSupportedException("not supported");
     }
 
-    public synchronized void close()
+    public void close()
             throws NamingException {
         try {
-            if (connection != null) {
+            if (connection.get() != null) {
                 if (debug)
                     System.out.println(new Date() + " " + toString() + "/close");
-                connection.close();
+                connection.get().close();
             }
         } catch (Exception ignored) {
         }
         if (!jndiInfo.isIntraVM() && jndiInfo.getIdleclose() > 0)
             TimerRegistry.Singleton().removeTimerListener(1000, this);
-        closed = true;
+        closed.set(true);
     }
 
     public String composeName(String p0, String p1)
@@ -273,9 +280,9 @@ public class ContextImpl implements Context, java.io.Serializable, AutoCloseable
         return session.createQueue(JNDISwiftlet.JNDI_QUEUE);
     }
 
-    public synchronized Object lookup(String name)
+    public Object lookup(String name)
             throws NamingException {
-        if (closed)
+        if (closed.get())
             throw new NamingException("context is closed!");
         if (name == null)
             throw new OperationNotSupportedException("context cloning is not supported!");
@@ -283,15 +290,15 @@ public class ContextImpl implements Context, java.io.Serializable, AutoCloseable
         Object obj = null;
         try {
             checkConnection();
-            TemporaryQueue tq = session.createTemporaryQueue();
-            MessageConsumer consumer = session.createConsumer(tq);
+            TemporaryQueue tq = session.get().createTemporaryQueue();
+            MessageConsumer consumer = session.get().createConsumer(tq);
 
             Versionable versionable = new Versionable();
             versionable.addVersioned(Versions.JNDI_CURRENT,
                     createVersioned(Versions.JNDI_CURRENT, new LookupRequest(name)),
                     "com.swiftmq.jndi.protocol.v" + Versions.JNDI_CURRENT + ".JNDIRequestFactory");
             BytesMessage request = createMessage(versionable, tq);
-            producer.send(getLookupDestination(session), request, DeliveryMode.NON_PERSISTENT, MessageImpl.MAX_PRIORITY, 0);
+            producer.get().send(getLookupDestination(session.get()), request, DeliveryMode.NON_PERSISTENT, MessageImpl.MAX_PRIORITY, 0);
             MessageImpl reply = null;
             if (jndiInfo.getTimeout() == 0)
                 reply = (MessageImpl) consumer.receive();
@@ -337,23 +344,23 @@ public class ContextImpl implements Context, java.io.Serializable, AutoCloseable
         throw new OperationNotSupportedException("not supported");
     }
 
-    public synchronized void rebind(String name, Object obj)
+    public void rebind(String name, Object obj)
             throws NamingException {
-        if (closed)
+        if (closed.get())
             throw new NamingException("context is closed!");
         if (!(obj instanceof TemporaryTopicImpl || obj instanceof TemporaryQueueImpl))
             throw new OperationNotSupportedException("rebind is only supported for TemporaryQueues/TemporaryTopics!");
         try {
             checkConnection();
-            TemporaryTopic tt = session.createTemporaryTopic();
-            MessageConsumer consumer = session.createConsumer(tt);
+            TemporaryTopic tt = session.get().createTemporaryTopic();
+            MessageConsumer consumer = session.get().createConsumer(tt);
 
             Versionable versionable = new Versionable();
             versionable.addVersioned(Versions.JNDI_CURRENT,
                     createVersioned(Versions.JNDI_CURRENT, new RebindRequest(name, (QueueImpl) obj)),
                     "com.swiftmq.jndi.protocol.v" + Versions.JNDI_CURRENT + ".JNDIRequestFactory");
             BytesMessage request = createMessage(versionable, tt);
-            producer.send(session.createTopic(JNDISwiftlet.JNDI_TOPIC), request, DeliveryMode.NON_PERSISTENT, MessageImpl.MAX_PRIORITY, 0);
+            producer.get().send(session.get().createTopic(JNDISwiftlet.JNDI_TOPIC), request, DeliveryMode.NON_PERSISTENT, MessageImpl.MAX_PRIORITY, 0);
             TextMessage reply = (TextMessage) consumer.receive();
             String text = reply.getText();
             consumer.close();
@@ -385,16 +392,16 @@ public class ContextImpl implements Context, java.io.Serializable, AutoCloseable
         throw new OperationNotSupportedException("not supported");
     }
 
-    public synchronized void unbind(String name)
+    public void unbind(String name)
             throws NamingException {
-        if (closed)
+        if (closed.get())
             throw new NamingException("context is closed!");
         try {
             checkConnection();
             Versionable versionable = new Versionable();
             versionable.addVersioned(400, createVersioned(400, new UnbindRequest(name)), "com.swiftmq.jndi.protocol.v400.JNDIRequestFactory");
             BytesMessage request = createMessage(versionable, null);
-            producer.send(session.createTopic(JNDISwiftlet.JNDI_TOPIC), request, DeliveryMode.NON_PERSISTENT, MessageImpl.MAX_PRIORITY, 0);
+            producer.get().send(session.get().createTopic(JNDISwiftlet.JNDI_TOPIC), request, DeliveryMode.NON_PERSISTENT, MessageImpl.MAX_PRIORITY, 0);
         } catch (Exception e) {
             throw new NamingException("exception occurred during unbind: " + e);
         }

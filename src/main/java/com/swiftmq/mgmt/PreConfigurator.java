@@ -81,6 +81,11 @@ public class PreConfigurator {
         Element configSwiftlet = XMLUtilities.getSwiftletElement(name, root);
         if (configSwiftlet == null) {
             switch (name) {
+                case "sys$filecache":
+                    configSwiftlet = root.addElement("swiftlet");
+                    configSwiftlet.addAttribute("name", name);
+                    configSwiftlet.addElement("caches");
+                    break;
                 case "xt$amqpbridge":
                     configSwiftlet = root.addElement("swiftlet");
                     configSwiftlet.addAttribute("name", name);
@@ -193,10 +198,10 @@ public class PreConfigurator {
                 if (name == null)
                     throw new Exception("Missing 'name' attribute in 'swiftlet' element!");
                 Element configSwiftlet = getSwiftletElement(name.getValue());
-                String op = getOp(changeElement);
-                if (configSwiftlet == null)
+                if (configSwiftlet == null) {
                     throw new Exception("Swiftlet with name '" + name.getValue() + "' not found!");
-                processElement(changeElement, configSwiftlet, false);
+                } else
+                    processElement(changeElement, configSwiftlet, false);
             } else {
                 processElement(changeElement, routerconfig.getRootElement().element("ha-router"), false);
             }

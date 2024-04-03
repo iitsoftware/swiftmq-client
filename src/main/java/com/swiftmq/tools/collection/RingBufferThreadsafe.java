@@ -26,10 +26,6 @@ public class RingBufferThreadsafe extends RingBuffer {
         super(extendSize);
     }
 
-    public RingBufferThreadsafe(RingBuffer base) {
-        super(base);
-    }
-
     public void add(Object obj) {
         lock.writeLock().lock();
         try {

@@ -5,8 +5,8 @@ import javax.jms.*;
 public class SingleSharedConnectionFactory
         implements ConnectionFactory, QueueConnectionFactory, TopicConnectionFactory {
     static final boolean DEBUG = Boolean.valueOf(System.getProperty("swiftmq.springsupport.debug", "false")).booleanValue();
-    private ConnectionFactory targetConnectionFactory = null;
-    private SharedJMSConnection sharedConnection = null;
+    private volatile ConnectionFactory targetConnectionFactory = null;
+    private volatile SharedJMSConnection sharedConnection = null;
     private long poolExpiration = 60000;
     private String clientId = null;
 
@@ -55,7 +55,7 @@ public class SingleSharedConnectionFactory
         }
     }
 
-    public synchronized Connection createConnection() throws JMSException {
+    public Connection createConnection() throws JMSException {
         if (DEBUG) System.out.println(toString() + "/createConnection");
         ensureConnection();
         return sharedConnection;
@@ -85,7 +85,7 @@ public class SingleSharedConnectionFactory
         throw new javax.jms.IllegalStateException("SingleSharedConnectionFactory: operation not supported!");
     }
 
-    public synchronized void destroy() throws Exception {
+    public void destroy() throws Exception {
         if (DEBUG) System.out.println(toString() + "/destroy");
         if (sharedConnection != null) {
             if (DEBUG) System.out.println(toString() + "/destroy, close shared connection ...");

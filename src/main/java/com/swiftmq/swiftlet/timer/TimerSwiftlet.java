@@ -18,7 +18,6 @@
 package com.swiftmq.swiftlet.timer;
 
 import com.swiftmq.swiftlet.Swiftlet;
-import com.swiftmq.swiftlet.threadpool.ThreadPool;
 import com.swiftmq.swiftlet.timer.event.SystemTimeChangeListener;
 import com.swiftmq.swiftlet.timer.event.TimerListener;
 
@@ -36,17 +35,6 @@ public abstract class TimerSwiftlet extends Swiftlet {
      * @param listener timer listener
      */
     public abstract void addInstantTimerListener(long delay, TimerListener listener);
-
-    /**
-     * Add a new instant TimerListener for a specific delay. An instant
-     * TimerListener run exactly once so a removeTimerListener isn't necessary.
-     * The TimerListener will be dispatched into the thread pool supplied as a parameter.
-     *
-     * @param delay      delay time in ms
-     * @param threadpool thread pool
-     * @param listener   timer listener
-     */
-    public abstract void addInstantTimerListener(long delay, ThreadPool threadpool, TimerListener listener);
 
     /**
      * Add a new instant TimerListener for a specific delay. An instant
@@ -74,27 +62,6 @@ public abstract class TimerSwiftlet extends Swiftlet {
      * @param doNotApplySystemTimeChanges if true, do NOT apply system time changes
      */
     public abstract void addTimerListener(long delay, TimerListener listener, boolean doNotApplySystemTimeChanges);
-
-    /**
-     * Add a new TimerListener for a specific delay
-     * The TimerListener will be dispatched into the thread pool supplied as a parameter.
-     *
-     * @param delay      delay time in ms
-     * @param threadpool thread pool
-     * @param listener   timer listener
-     */
-    public abstract void addTimerListener(long delay, ThreadPool threadpool, TimerListener listener);
-
-    /**
-     * Add a new TimerListener for a specific delay
-     * The TimerListener will be dispatched into the thread pool supplied as a parameter.
-     *
-     * @param delay                       delay time in ms
-     * @param threadpool                  thread pool
-     * @param listener                    timer listener
-     * @param doNotApplySystemTimeChanges if true, do NOT apply system time changes
-     */
-    public abstract void addTimerListener(long delay, ThreadPool threadpool, TimerListener listener, boolean doNotApplySystemTimeChanges);
 
     /**
      * Remove a registered TimerListener

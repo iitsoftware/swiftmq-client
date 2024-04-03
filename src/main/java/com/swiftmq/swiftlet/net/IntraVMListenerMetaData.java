@@ -28,6 +28,7 @@ import com.swiftmq.swiftlet.net.event.ConnectionListener;
  * @author IIT GmbH, Bremen/Germany, Copyright (c) 2000-2002, All Rights Reserved
  */
 public class IntraVMListenerMetaData extends ConnectionMetaData {
+    private static final int DEFAULT_SIZE = 128 * 1024;
     /**
      * Constructs a new IntraVMListenerMetaData with default SMQP protocol handlers.
      *
@@ -35,7 +36,7 @@ public class IntraVMListenerMetaData extends ConnectionMetaData {
      * @param connectionListener connection listener.
      */
     public IntraVMListenerMetaData(Swiftlet swiftlet, ConnectionListener connectionListener) {
-        super(swiftlet, 0, null, connectionListener, 0, 0, 0, 0, true);
+        super(swiftlet, 0, null, connectionListener, DEFAULT_SIZE, DEFAULT_SIZE, DEFAULT_SIZE, DEFAULT_SIZE, true);
     }
 
     /**
@@ -48,7 +49,7 @@ public class IntraVMListenerMetaData extends ConnectionMetaData {
      */
     public IntraVMListenerMetaData(Swiftlet swiftlet, ConnectionListener connectionListener,
                                    ProtocolInputHandler protocolInputHandler, ProtocolOutputHandler protocolOutputHandler) {
-        super(swiftlet, 0, null, connectionListener, 0, 0, 0, 0, true, protocolInputHandler, protocolOutputHandler);
+        super(swiftlet, 0, null, connectionListener, DEFAULT_SIZE, DEFAULT_SIZE, DEFAULT_SIZE, DEFAULT_SIZE, true, protocolInputHandler, protocolOutputHandler);
     }
 
     public String toString() {

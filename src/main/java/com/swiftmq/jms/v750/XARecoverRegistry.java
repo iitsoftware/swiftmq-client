@@ -21,12 +21,12 @@ import com.swiftmq.jms.XidImpl;
 import com.swiftmq.tools.requestreply.Request;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class XARecoverRegistry {
-    Map xidMap = new HashMap();
+    Map<XidImpl, List> xidMap = new ConcurrentHashMap<>();
 
 
     private XARecoverRegistry() {
@@ -36,7 +36,7 @@ public class XARecoverRegistry {
         return InstanceHolder.instance;
     }
 
-    public synchronized void addRequest(XidImpl xid, Request request) {
+    public void addRequest(XidImpl xid, Request request) {
         List list = (List) xidMap.get(xid);
         if (list == null) {
             list = new ArrayList();
@@ -45,18 +45,18 @@ public class XARecoverRegistry {
         list.add(request);
     }
 
-    public synchronized List getRequestList(XidImpl xid) {
+    public List getRequestList(XidImpl xid) {
         ArrayList l = (ArrayList) xidMap.get(xid);
         if (l != null)
             return (List) l.clone();
         return null;
     }
 
-    public synchronized void clear(XidImpl xid) {
+    public void clear(XidImpl xid) {
         xidMap.remove(xid);
     }
 
-    public synchronized void clear() {
+    public void clear() {
         xidMap.clear();
     }
 
