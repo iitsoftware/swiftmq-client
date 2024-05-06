@@ -448,10 +448,10 @@ public class Connection implements ExceptionHandler {
     /**
      * Creates a new Session.
      *
-     * @param incomingWindowSize Incoming Window Size (maxnumber of unsettled incoming transfers)
+     * @param incomingWindowSize Incoming Window Size (max number of unsettled incoming transfers)
      * @param outgoingWindowSize Outgoing Window Size (max number of unsettled outgoing transfers)
      * @return Session
-     * @throws SessionHandshakeException An error occured during handshake
+     * @throws SessionHandshakeException An error occurred during handshake
      * @throws ConnectionClosedException The connection was closed
      */
     public Session createSession(long incomingWindowSize, long outgoingWindowSize) throws SessionHandshakeException, ConnectionClosedException {
