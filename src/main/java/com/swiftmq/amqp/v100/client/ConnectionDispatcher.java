@@ -217,12 +217,12 @@ public class ConnectionDispatcher
     }
 
     private void notifyWaitingPOs(POObject[] po) {
-        for (int i = 0; i < po.length; i++) {
-            if (po[i] != null) {
-                po[i].setSuccess(false);
-                if (po[i].getException() == null)
-                    po[i].setException("Connection was asynchronously closed");
-                po[i].getSemaphore().notifySingleWaiter();
+        for (POObject poObject : po) {
+            if (poObject != null) {
+                poObject.setSuccess(false);
+                if (poObject.getException() == null)
+                    poObject.setException("Connection was asynchronously closed");
+                poObject.getSemaphore().notifySingleWaiter();
             }
         }
     }
@@ -584,8 +584,15 @@ public class ConnectionDispatcher
 
         public void visit(CloseFrame frame) {
             if (pTracer.isEnabled()) pTracer.trace(toString(), ", visit=" + frame);
-            remoteClose = frame;
-            checkBothSidesClosed();
+            // Async remote close due to error
+            if (frame.getError() != null) {
+                if (myConnection.getExceptionListener() != null)
+                    myConnection.getExceptionListener().onException(new ConnectionClosedException(frame.getError().getDescription().getValue()));
+                new Thread(() -> myConnection.cancel()).start();
+            } else {
+                remoteClose = frame;
+                checkBothSidesClosed();
+            }
         }
 
         public void visit(SaslMechanismsFrame frame) {
