@@ -7,7 +7,7 @@
 
   <groupId>com.swiftmq</groupId>
   <artifactId>swiftmq-client</artifactId>
-  <version>13.0.2</version>
+  <version>13.1.0</version>
 
   <name>SwiftMQ Client</name>
   <description>Client for SwiftMQ Messaging System with JMS, AMQP 1.0 and file transfer over JMS.</description>
@@ -48,7 +48,7 @@
     <dependency>
       <groupId>com.thoughtworks.xstream</groupId>
       <artifactId>xstream</artifactId>
-      <version>1.4.20</version>
+      <version>1.4.21</version>
     </dependency>
     <dependency>
       <groupId>javax.jms</groupId>
