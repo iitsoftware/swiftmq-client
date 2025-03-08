@@ -7,7 +7,7 @@
 
   <groupId>com.swiftmq</groupId>
   <artifactId>swiftmq-client</artifactId>
-  <version>13.1.0</version>
+  <version>13.1.1</version>
 
   <name>SwiftMQ Client</name>
   <description>Client for SwiftMQ Messaging System with JMS, AMQP 1.0 and file transfer over JMS.</description>
@@ -62,6 +62,7 @@
     </dependency>
   </dependencies>
 
+  <!-- Not needed anymore with the new Sonatype plugin
   <distributionManagement>
     <snapshotRepository>
       <id>ossrh</id>
@@ -73,6 +74,7 @@
       </url>
     </repository>
   </distributionManagement>
+  -->
 
   <scm>
     <connection>scm:git:git://github.com/iitsoftware/swiftmq-client.git</connection>
@@ -92,14 +94,12 @@
         </configuration>
       </plugin>
       <plugin>
-        <groupId>org.sonatype.plugins</groupId>
-        <artifactId>nexus-staging-maven-plugin</artifactId>
-        <version>1.6.13</version>
+        <groupId>org.sonatype.central</groupId>
+        <artifactId>central-publishing-maven-plugin</artifactId>
+        <version>0.7.0</version>
         <extensions>true</extensions>
         <configuration>
-          <serverId>ossrh</serverId>
-          <nexusUrl>https://oss.sonatype.org/</nexusUrl>
-          <autoReleaseAfterClose>true</autoReleaseAfterClose>
+          <publishingServerId>central</publishingServerId>
         </configuration>
       </plugin>
     </plugins>
