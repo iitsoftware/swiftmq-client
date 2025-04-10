@@ -130,6 +130,7 @@ public class MessageConsumerImpl implements MessageConsumer, SwiftMQMessageConsu
         if (request.isRequiresRestart())
             fillCachePending.set(false);
         messageCache.add(request);
+        waiter.signal();
     }
 
     void addToCache(AsyncMessageDeliveryRequest[] requests, boolean lastRestartRequired) {
@@ -372,12 +373,14 @@ public class MessageConsumerImpl implements MessageConsumer, SwiftMQMessageConsu
                             } else {
                                 long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeout);
                                 long remaining;
+                                while (true) {
+                                    if (messageCache.getSize() > 0 || !fillCachePending.get() || cancelled.get() || isClosed())
+                                        break;
 
-                                while ((remaining = deadline - System.nanoTime()) > 0 &&
-                                       messageCache.getSize() == 0 &&
-                                       fillCachePending.get() &&
-                                       !cancelled.get() &&
-                                       !isClosed()) {
+                                    remaining = deadline - System.nanoTime();
+                                    if (remaining <= 0)
+                                        break;
+
                                     waiter.doWait(TimeUnit.NANOSECONDS.toMillis(remaining));
                                 }
                             }
