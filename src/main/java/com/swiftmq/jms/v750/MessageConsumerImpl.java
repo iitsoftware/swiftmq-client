@@ -33,6 +33,7 @@ import com.swiftmq.tools.util.UninterruptableWaiter;
 import javax.jms.IllegalStateException;
 import javax.jms.*;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
@@ -371,9 +372,9 @@ public class MessageConsumerImpl implements MessageConsumer, SwiftMQMessageConsu
                             } else {
                                 long to = timeout;
                                 do {
-                                    long startWait = System.currentTimeMillis();
+                                    long startWait = System.nanoTime();
                                     waiter.doWait(to);
-                                    long delta = System.currentTimeMillis() - startWait;
+                                    long delta = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startWait);
                                     to -= delta;
                                 }
                                 while (to > 0 && messageCache.getSize() == 0 && fillCachePending.get() && !cancelled.get() && !isClosed());
