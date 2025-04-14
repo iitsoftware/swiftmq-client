@@ -25,6 +25,7 @@ import com.swiftmq.amqp.v100.client.po.POAuthenticate;
 import com.swiftmq.amqp.v100.client.po.POOpen;
 import com.swiftmq.amqp.v100.client.po.POProtocolRequest;
 import com.swiftmq.amqp.v100.client.po.POSendClose;
+import com.swiftmq.amqp.v100.generated.transport.definitions.Fields;
 import com.swiftmq.amqp.v100.transport.AMQPFrame;
 import com.swiftmq.amqp.v100.types.AMQPString;
 import com.swiftmq.amqp.v100.types.AMQPSymbol;
@@ -92,6 +93,7 @@ public class Connection implements ExceptionHandler {
     int outputBufferExtendSize = 65536;
     SocketFactory socketFactory = new PlainSocketFactory();
     ExceptionListener exceptionListener = null;
+    Fields properties = null;
 
     /**
      * Creates a Connection and uses SASL for authentication.
@@ -223,6 +225,23 @@ public class Connection implements ExceptionHandler {
         this.openHostname = openHostname;
     }
 
+    /**
+     * Sets the of the OpenFrame to be sent to the remote endpoint
+     *
+     * @param properties Fields for the OpenFrame
+     */
+    public void setProperties(Fields properties) {
+        this.properties = properties;
+    }
+
+    /**
+     * Retrieves the properties of the OpenFrame from the remote endpoint. Available after connect
+     *
+     * @return Fields object representing the remote properties, or null if not available
+     */
+    public Fields getRemoteProperties() {
+        return connectionDispatcher.getRemoteProperties();
+    }
     /**
      * Sets the idle timeout. Default is Long.MAX_VALUE.
      * <p/>
@@ -365,6 +384,8 @@ public class Connection implements ExceptionHandler {
                 return connectionDispatcher.getProtocolHandler();
             }
         };
+        if (properties != null)
+            connectionDispatcher.setProperties(properties);
         connectionDispatcher.setMyConnection(this);
         networkConnection.start();
         dos = new DataStreamOutputStream(networkConnection.getOutputStream());

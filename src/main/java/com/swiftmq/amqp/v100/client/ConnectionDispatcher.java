@@ -26,6 +26,7 @@ import com.swiftmq.amqp.v100.generated.FrameReader;
 import com.swiftmq.amqp.v100.generated.security.sasl.*;
 import com.swiftmq.amqp.v100.generated.transport.definitions.ConnectionError;
 import com.swiftmq.amqp.v100.generated.transport.definitions.ErrorConditionFactory;
+import com.swiftmq.amqp.v100.generated.transport.definitions.Fields;
 import com.swiftmq.amqp.v100.generated.transport.definitions.Milliseconds;
 import com.swiftmq.amqp.v100.generated.transport.performatives.*;
 import com.swiftmq.amqp.v100.transport.AMQPFrame;
@@ -76,7 +77,7 @@ public class ConnectionDispatcher
     POProtocolRequest protPO = null;
     POAuthenticate authPO = null;
     POOpen openPO = null;
-    OpenFrame remoteOpen = null;
+    volatile OpenFrame remoteOpen = null;
     POSendClose closePO = null;
     CloseFrame remoteClose = null;
     SaslMechanismsFrame saslMechanisms = null;
@@ -89,6 +90,7 @@ public class ConnectionDispatcher
     long idleTimeoutDelay = 0;
     SaslClient saslClient = null;
     volatile boolean connectionDisabled = false;
+    Fields properties = null;
 
     int maxLocalFrameSize = Integer.MAX_VALUE;
     int maxRemoteFrameSize = Integer.MAX_VALUE;
@@ -131,6 +133,16 @@ public class ConnectionDispatcher
     public int getMaxFrameSize() {
         // smallest size of local/remote size but at least 512
         return Math.max(512, Math.min(maxLocalFrameSize, maxRemoteFrameSize));
+    }
+
+    public void setProperties(Fields properties) {
+        this.properties = properties;
+    }
+
+    public Fields getRemoteProperties() {
+        if (remoteOpen != null)
+            return remoteOpen.getProperties();
+        return null;
     }
 
     public void setSaslActive(boolean saslActive) {
@@ -317,6 +329,8 @@ public class ConnectionDispatcher
             OpenFrame openFrame = new OpenFrame(0);
             openFrame.setContainerId(new AMQPString(po.getContainerId()));
             openFrame.setChannelMax(new AMQPUnsignedShort(po.getMaxChannel()));
+            if (properties != null)
+                openFrame.setProperties(properties);
             if (myConnection.getOpenHostname() == null)
                 openFrame.setHostname(new AMQPString(remoteHostname));
             else
