@@ -23,6 +23,7 @@ import com.swiftmq.tools.prop.SystemProperties;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class DefaultPoolManager extends PoolManager {
+    public static final String PROP_JAC_ACTIVE = "swiftmq.jac.active";
     public static final String PROP_CONNECTOR_POOL_MIN_THREADS = "swiftmq.pool.connector.threads.min";
     public static final String PROP_CONNECTOR_POOL_MAX_THREADS = "swiftmq.pool.connector.threads.max";
     public static final String PROP_CONNECTOR_POOL_PRIO = "swiftmq.pool.connector.priority";
@@ -45,6 +46,16 @@ public class DefaultPoolManager extends PoolManager {
     ThreadPool connectionPool = null;
     ThreadPool sessionPool = null;
     ThreadPool connectorPool = null;
+    boolean JAC_ACTIVE = System.getProperty(PROP_JAC_ACTIVE, "false").equals("true");
+
+    public DefaultPoolManager() {
+        if (JAC_ACTIVE) {
+            ThreadPool pool = new IVMTaskScheduler();
+            connectionPool = pool;
+            sessionPool = pool;
+            connectorPool = pool;
+        }
+    }
 
     ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
