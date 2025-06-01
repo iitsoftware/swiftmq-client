@@ -12,9 +12,7 @@ public class IVMTaskScheduler implements ThreadPool {
 
     public IVMTaskScheduler() {
         threadpoolSwiftlet = (ThreadpoolSwiftlet) SwiftletManager.getInstance().getSwiftlet("sys$threadpool");
-        if (threadpoolSwiftlet == null)
-            System.err.println("[" + this + "] Failed to get ThreadpoolSwiftlet");
-        else
+        if (threadpoolSwiftlet != null)
             System.out.println("[" + this + "] App uses virtual threads, scheduled in: adhocvirtual");
     }
 
@@ -66,7 +64,10 @@ public class IVMTaskScheduler implements ThreadPool {
      */
     @Override
     public void dispatchTask(AsyncTask asyncTask) {
-        threadpoolSwiftlet.runAsync(asyncTask, true);
+        if (threadpoolSwiftlet != null)
+            threadpoolSwiftlet.runAsync(asyncTask, true);
+        else
+            System.err.println("[IVMTaskScheduler] dispatchTask() no threadpool swiftlet");
     }
 
     /**
