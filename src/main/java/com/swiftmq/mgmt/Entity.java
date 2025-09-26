@@ -1064,7 +1064,7 @@ public class Entity implements Dumpable {
 
     protected void notifyEntityWatchListeners(boolean entityAdded, Entity entity) {
         List copy = copyOf(watchListeners);
-        IntStream.range(0, copy.size()).mapToObj(i -> (EntityWatchListener) watchListeners.get(i)).forEach(l -> {
+        IntStream.range(0, copy.size()).mapToObj(i -> (EntityWatchListener) copy.get(i)).forEach(l -> {
             if (entityAdded)
                 l.entityAdded(this, entity);
             else
