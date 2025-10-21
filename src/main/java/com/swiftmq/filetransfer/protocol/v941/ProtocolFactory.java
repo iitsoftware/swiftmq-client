@@ -36,8 +36,6 @@ public class ProtocolFactory implements MessageBasedFactory {
     public static final int FILEQUERY_REQ = 8;
     public static final int FILEQUERY_REP = 9;
     public static final int SESSIONCLOSE_REQ = 10;
-    public static final int FILEQUERYPROPS_REQ = 11;
-    public static final int FILEQUERYPROPS_REP = 12;
 
     MessageBasedFactory delegatedFactory = null;
 
@@ -90,12 +88,6 @@ public class ProtocolFactory implements MessageBasedFactory {
                 break;
             case SESSIONCLOSE_REQ:
                 messageBased = new SessionCloseRequest(message);
-                break;
-            case FILEQUERYPROPS_REQ:
-                messageBased = new FileQueryPropsRequest(message);
-                break;
-            case FILEQUERYPROPS_REP:
-                messageBased = new FileQueryPropsReply(message);
                 break;
             default:
                 if (delegatedFactory != null)

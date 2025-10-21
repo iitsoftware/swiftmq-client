@@ -31,6 +31,4 @@ public interface ProtocolVisitor extends MessageBasedRequestVisitor {
     void visit(FileQueryRequest request);
 
     void visit(SessionCloseRequest request);
-
-    void visit(FileQueryPropsRequest request);
 }

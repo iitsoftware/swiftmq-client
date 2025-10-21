@@ -44,7 +44,7 @@ public class SecureClassLoaderObjectInputStream extends ObjectInputStream {
 
     static {
         trusted = System.getProperty("swiftmq.security.objectmessage.trusted.pkg", "*").split(",");
-        serializablePackages = "java.lang,javax.security,java.util,com.swiftmq,com.thoughtworks.xstream".split(",");
+        serializablePackages = "java.lang,javax.security,java.util,com.swiftmq".split(",");
     }
 
     private final ClassLoader inLoader;

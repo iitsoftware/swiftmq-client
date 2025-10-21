@@ -323,11 +323,7 @@ public class FiletransferImpl extends Filetransfer {
     }
 
     public Map<String, Map<String, Object>> queryProperties() throws Exception {
-        checkState();
-        FileQueryPropsReply reply = (FileQueryPropsReply) request(new FileQueryPropsRequest(link, selector), accessorHolder, messageBasedFactory, null);
-        if (!reply.isOk())
-            throw new FiletransferException(reply.getException());
-        return reply.getResult();
+        throw new FiletransferException("Operation not supported - removed due to XStream dependency");
     }
 
     public void close() {
