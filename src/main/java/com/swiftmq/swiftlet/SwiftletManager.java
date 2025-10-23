@@ -23,6 +23,8 @@ import com.swiftmq.swiftlet.event.KernelStartupListener;
 import com.swiftmq.swiftlet.event.SwiftletManagerEvent;
 import com.swiftmq.swiftlet.event.SwiftletManagerListener;
 import com.swiftmq.swiftlet.log.LogSwiftlet;
+import com.swiftmq.swiftlet.preconfig.PreConfigProcessor;
+import com.swiftmq.swiftlet.preconfig.RouterConfigApplicator;
 import com.swiftmq.swiftlet.timer.TimerSwiftlet;
 import com.swiftmq.swiftlet.trace.TraceSpace;
 import com.swiftmq.swiftlet.trace.TraceSwiftlet;
@@ -94,7 +96,6 @@ public class SwiftletManager {
     static final String PROP_PRECONFIG = "swiftmq.preconfig";
     static final String PROP_SHUTDOWN_HOOK = "swiftmq.shutdown.hook";
     static final String PROP_REUSE_KERNEL_CL = "swiftmq.reuse.kernel.classloader";
-    static final long PROP_CONFIG_WATCHDOG_INTERVAL = Long.parseLong(System.getProperty("swiftmq.config.watchdog.interval", "0"));
     protected static final AtomicReference<SwiftletManager> _instance = new AtomicReference<>();
     static SimpleDateFormat fmt = new SimpleDateFormat(".yyyyMMddHHmmssSSS");
     final AtomicReference<String> configFilename = new AtomicReference<>();
@@ -115,8 +116,6 @@ public class SwiftletManager {
     LogSwiftlet logSwiftlet = null;
     TraceSwiftlet traceSwiftlet = null;
     TimerSwiftlet timerSwiftlet = null;
-
-    ConfigfileWatchdog configfileWatchdog = null;
 
     TraceSpace traceSpace = null;
     final AtomicLong memCollectInterval = new AtomicLong(10000);
@@ -546,15 +545,24 @@ public class SwiftletManager {
      */
     private void checkAndApplyPreconfig() throws Exception {
         String preconfig = System.getProperty(PROP_PRECONFIG);
-        if (preconfig != null && preconfig.trim().length() > 0) {
-            StringTokenizer t = new StringTokenizer(preconfig, ",");
-            while (t.hasMoreTokens()) {
-                String pc = t.nextToken();
-                XMLUtilities.writeDocument(routerConfig.get(), configFilename + fmt.format(new Date()));
-                routerConfig.set(new PreConfigurator(routerConfig.get(), XMLUtilities.createDocument(new FileInputStream(pc))).applyChanges());
-                XMLUtilities.writeDocument(routerConfig.get(), configFilename.get());
-                System.out.println("Applied changes from preconfig file: " + pc);
+        boolean hasPreconfig = preconfig != null && preconfig.trim().length() > 0;
+
+        // Check if there's any preconfig work to do (system prop or directory)
+        if (hasPreconfig || new File(System.getProperty("swiftmq.preconfig.watchdog.dir", "../preconfig-drop")).exists()) {
+            // Create backup before applying preconfig
+            XMLUtilities.writeDocument(routerConfig.get(), configFilename.get() + fmt.format(new Date()));
+
+            // Create applicator and processor
+            RouterConfigApplicator applicator = new RouterConfigApplicator(routerConfig.get());
+            PreConfigProcessor processor = new PreConfigProcessor(applicator, "SwiftletManager", configFilename.get());
+
+            // Process files from system property (for compatibility)
+            if (hasPreconfig) {
+                processor.processFiles(preconfig);
             }
+
+            // Process files from watchdog directory
+            processor.processDirectory();
         }
     }
 
@@ -597,11 +605,6 @@ public class SwiftletManager {
         initSwiftlets();
 
         timerSwiftlet = (TimerSwiftlet) getSwiftlet("sys$timer");
-
-        if (PROP_CONFIG_WATCHDOG_INTERVAL > 0) {
-            configfileWatchdog = new ConfigfileWatchdog(traceSpace, logSwiftlet, configFilename.get());
-            timerSwiftlet.addTimerListener(PROP_CONFIG_WATCHDOG_INTERVAL, configfileWatchdog);
-        }
 
         // shutdown hook
         if (shutdownHook == null && registerShutdownHook.get()) {
@@ -930,8 +933,6 @@ public class SwiftletManager {
             System.out.println("Shutdown SwiftMQ " + Version.getKernelVersion() + " " + "[" + getRouterName() + "] ...");
             trace("shutdown");
             saveConfigIfDirty();
-            if (configfileWatchdog != null)
-                timerSwiftlet.removeTimerListener(configfileWatchdog);
             memoryMeter.close();
             stopAllSwiftlets();
             stopKernelSwiftlets();
