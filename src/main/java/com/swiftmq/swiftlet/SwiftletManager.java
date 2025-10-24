@@ -575,6 +575,8 @@ public class SwiftletManager {
      */
     private void startRuntimePreConfigProcessor() {
         try {
+            logSwiftlet.logInformation("SwiftletManager/PreConfig", "Starting runtime preconfig processor...");
+
             // Create SaveConfigCallback
             SaveConfigCallback saveCallback = () -> {
                 try {
@@ -588,13 +590,20 @@ public class SwiftletManager {
             ManagementTreeApplicator applicator = new ManagementTreeApplicator(traceSpace, logSwiftlet);
             runtimePreConfigProcessor = new PreConfigProcessor(applicator, "SwiftletManager/PreConfig", saveCallback);
 
+            logSwiftlet.logInformation("SwiftletManager/PreConfig", "PreConfigProcessor created, registering with timer...");
+
             // Register with timer for periodic monitoring
             timerSwiftlet.addTimerListener(runtimePreConfigProcessor.getWatchdogInterval(), runtimePreConfigProcessor);
 
+            logSwiftlet.logInformation("SwiftletManager/PreConfig", "Timer listener registered, starting watchdog...");
+
             // Log startup of watchdog
             runtimePreConfigProcessor.startWatchdog();
+
+            logSwiftlet.logInformation("SwiftletManager/PreConfig", "Runtime preconfig processor started successfully");
         } catch (Exception e) {
             logSwiftlet.logError("SwiftletManager/PreConfig", "Failed to start runtime preconfig processor: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
