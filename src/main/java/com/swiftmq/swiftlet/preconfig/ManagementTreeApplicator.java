@@ -187,8 +187,26 @@ public class ManagementTreeApplicator extends AbstractApplicator {
 
         trace(context, "Replacing entity: " + entityName);
 
-        // Remove old entity if exists
+        // Find the existing entity
         Entity existingEntity = parentEntity.getEntity(entityName);
+
+        // If the element has child elements and the target is an EntityList, clear and repopulate
+        if (changeElement.elements().size() > 0 && existingEntity instanceof EntityList) {
+            trace(context, "Replace operation on EntityList with children - clearing and repopulating");
+            EntityList entityList = (EntityList) existingEntity;
+
+            // Clear existing entities
+            handleClearOperation(context, entityList);
+
+            // Process child elements (add them)
+            processChildElements(context, entityList, changeElement);
+
+            changesMade = true;
+            logInfo(context, "Replaced entities in EntityList: " + entityName);
+            return;
+        }
+
+        // Otherwise, remove and recreate the entity
         if (existingEntity != null) {
             try {
                 parentEntity.removeEntity(existingEntity);
