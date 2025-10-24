@@ -223,11 +223,15 @@ public class PreConfigProcessor implements TimerListener {
         }
 
         applicator.trace(context, "Checking preconfig directory for changes");
+        applicator.logInfo(context, "Checking preconfig directory for changes: " + watchdogDir);
 
         File[] files = dir.listFiles((d, name) -> name.endsWith(".xml"));
         if (files == null) {
+            applicator.logInfo(context, "No files found in preconfig directory");
             return;
         }
+
+        applicator.logInfo(context, "Found " + files.length + " XML file(s) in preconfig directory");
 
         // Sort files lexically by name
         Arrays.sort(files, Comparator.comparing(File::getName));
@@ -238,6 +242,10 @@ public class PreConfigProcessor implements TimerListener {
         logFileProcessing = false;
 
         try {
+            int newFiles = 0;
+            int updatedFiles = 0;
+            int skippedFiles = 0;
+
             for (File file : files) {
                 String filePath = file.getAbsolutePath();
                 long currentModified = file.lastModified();
@@ -246,20 +254,29 @@ public class PreConfigProcessor implements TimerListener {
                 // Process if file is new or has been updated
                 if (previousModified == null) {
                     applicator.trace(context, "New preconfig file detected: " + file.getName());
+                    applicator.logInfo(context, "New preconfig file detected: " + file.getName());
                     try {
                         processFile(file);
+                        newFiles++;
                     } catch (Exception e) {
                         applicator.logError(context, "Error processing new file " + file.getName() + ": " + e.getMessage());
                     }
                 } else if (currentModified > previousModified) {
                     applicator.trace(context, "Updated preconfig file detected: " + file.getName());
+                    applicator.logInfo(context, "Updated preconfig file detected: " + file.getName());
                     try {
                         processFile(file);
+                        updatedFiles++;
                     } catch (Exception e) {
                         applicator.logError(context, "Error processing updated file " + file.getName() + ": " + e.getMessage());
                     }
+                } else {
+                    applicator.trace(context, "File already processed: " + file.getName());
+                    skippedFiles++;
                 }
             }
+
+            applicator.logInfo(context, "Preconfig watchdog check complete: " + newFiles + " new, " + updatedFiles + " updated, " + skippedFiles + " unchanged");
         } finally {
             logFileProcessing = previousLogFileProcessing;
         }
