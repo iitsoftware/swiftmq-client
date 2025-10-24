@@ -104,8 +104,48 @@ public class ManagementTreeApplicator extends AbstractApplicator {
             return;
         }
 
-        // Create new entity from XML
-        Entity newEntity = createEntityFromElement(changeElement);
+        // Create new entity using the EntityList's template if parent is an EntityList
+        Entity newEntity;
+        if (parentEntity instanceof EntityList) {
+            EntityList entityList = (EntityList) parentEntity;
+            newEntity = entityList.createEntity();
+            if (newEntity == null) {
+                logError(context, "Failed to create entity from EntityList template");
+                throw new Exception("Failed to create entity from template");
+            }
+            trace(context, "Created entity from EntityList template");
+        } else {
+            logError(context, "Parent is not an EntityList, cannot add entity: " + entityName);
+            throw new Exception("Parent is not an EntityList");
+        }
+
+        // Set the name
+        newEntity.setName(entityName);
+
+        // Create commands for the entity
+        newEntity.createCommands();
+        trace(context, "Created commands for entity: " + entityName);
+
+        // Update property values from XML attributes
+        for (Iterator<Attribute> iter = changeElement.attributeIterator(); iter.hasNext(); ) {
+            Attribute attr = iter.next();
+            String attrName = attr.getName();
+            if (!attrName.equals("name") && !attrName.equals(OP)) {
+                Property prop = newEntity.getProperty(attrName);
+                if (prop != null) {
+                    String newValue = attr.getValue();
+                    try {
+                        Object typedValue = Property.convertToType(prop.getType(), newValue);
+                        prop.setValue(typedValue);
+                        trace(context, "Set property '" + attrName + "' to '" + newValue + "'");
+                    } catch (Exception e) {
+                        logError(context, "Failed to set property '" + attrName + "': " + e.getMessage());
+                    }
+                } else {
+                    logWarning(context, "Property '" + attrName + "' not found in entity template");
+                }
+            }
+        }
 
         try {
             parentEntity.addEntity(newEntity);
@@ -158,8 +198,49 @@ public class ManagementTreeApplicator extends AbstractApplicator {
             }
         }
 
-        // Create and add new entity
-        Entity newEntity = createEntityFromElement(changeElement);
+        // Create new entity using the EntityList's template if parent is an EntityList
+        Entity newEntity;
+        if (parentEntity instanceof EntityList) {
+            EntityList entityList = (EntityList) parentEntity;
+            newEntity = entityList.createEntity();
+            if (newEntity == null) {
+                logError(context, "Failed to create entity from EntityList template");
+                throw new Exception("Failed to create entity from template");
+            }
+            trace(context, "Created entity from EntityList template");
+        } else {
+            logError(context, "Parent is not an EntityList, cannot replace entity: " + entityName);
+            throw new Exception("Parent is not an EntityList");
+        }
+
+        // Set the name
+        newEntity.setName(entityName);
+
+        // Create commands for the entity
+        newEntity.createCommands();
+        trace(context, "Created commands for entity: " + entityName);
+
+        // Update property values from XML attributes
+        for (Iterator<Attribute> iter = changeElement.attributeIterator(); iter.hasNext(); ) {
+            Attribute attr = iter.next();
+            String attrName = attr.getName();
+            if (!attrName.equals("name") && !attrName.equals(OP)) {
+                Property prop = newEntity.getProperty(attrName);
+                if (prop != null) {
+                    String newValue = attr.getValue();
+                    try {
+                        Object typedValue = Property.convertToType(prop.getType(), newValue);
+                        prop.setValue(typedValue);
+                        trace(context, "Set property '" + attrName + "' to '" + newValue + "'");
+                    } catch (Exception e) {
+                        logError(context, "Failed to set property '" + attrName + "': " + e.getMessage());
+                    }
+                } else {
+                    logWarning(context, "Property '" + attrName + "' not found in entity template");
+                }
+            }
+        }
+
         try {
             parentEntity.addEntity(newEntity);
             changesMade = true;
@@ -262,35 +343,6 @@ public class ManagementTreeApplicator extends AbstractApplicator {
         }
     }
 
-    private Entity createEntityFromElement(Element element) {
-        String name = getEntityName(element);
-        String displayName = name;
-        String description = "";
-
-        // Create basic entity
-        Entity entity = new Entity(name, displayName, description, null);
-
-        // Add properties from attributes
-        for (Iterator<Attribute> iter = element.attributeIterator(); iter.hasNext(); ) {
-            Attribute attr = iter.next();
-            String attrName = attr.getName();
-            if (!attrName.equals("name") && !attrName.equals(OP)) {
-                Property prop = new Property(attrName);
-                try {
-                    prop.setValue(attr.getValue());
-                } catch (InvalidValueException e) {
-                    throw new RuntimeException(e);
-                } catch (InvalidTypeException e) {
-                    throw new RuntimeException(e);
-                } catch (PropertyChangeException e) {
-                    throw new RuntimeException(e);
-                }
-                entity.addProperty(attrName, prop);
-            }
-        }
-
-        return entity;
-    }
 
     @Override
     protected void trace(String context, String message) {

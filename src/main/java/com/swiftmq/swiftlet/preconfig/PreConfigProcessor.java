@@ -167,6 +167,7 @@ public class PreConfigProcessor implements TimerListener {
      */
     private void processFile(File file) throws Exception {
         applicator.trace(context, "Processing preconfig file: " + file.getName());
+        applicator.logInfo(context, "Processing preconfig file: " + file.getName());
 
         // Reset changes flag
         if (applicator instanceof ManagementTreeApplicator) {
@@ -176,6 +177,7 @@ public class PreConfigProcessor implements TimerListener {
         }
 
         // Load the preconfig document
+        applicator.logInfo(context, "Loading XML document from: " + file.getAbsolutePath());
         Document preconfigDoc = XMLUtilities.createDocument(new FileInputStream(file));
 
         // Apply using the injected applicator
@@ -190,19 +192,25 @@ public class PreConfigProcessor implements TimerListener {
                 applicator.logInfo(context, "Saved routerconfig.xml after preconfig changes");
             }
         } else if (applicator instanceof ManagementTreeApplicator) {
+            applicator.logInfo(context, "Applying preconfig to management tree...");
             ((ManagementTreeApplicator) applicator).applyPreConfig(preconfigDoc, context + "/" + file.getName());
 
             // Save configuration if changes were made
             ManagementTreeApplicator mtApplicator = (ManagementTreeApplicator) applicator;
+            applicator.logInfo(context, "Changes made: " + mtApplicator.hasChangesMade());
             if (mtApplicator.hasChangesMade() && saveCallback != null) {
                 applicator.trace(context, "Changes detected, saving configuration");
                 applicator.logInfo(context, "Saving configuration after preconfig changes");
                 saveCallback.saveConfiguration();
+            } else if (!mtApplicator.hasChangesMade()) {
+                applicator.logInfo(context, "No changes detected, skipping save");
             }
         }
 
         // Remember this file and its modification time
-        processedFiles.put(file.getAbsolutePath(), file.lastModified());
+        long timestamp = file.lastModified();
+        processedFiles.put(file.getAbsolutePath(), timestamp);
+        applicator.logInfo(context, "Stored timestamp for file " + file.getName() + ": " + timestamp);
 
         applicator.trace(context, "Successfully processed preconfig file: " + file.getName());
         if (logFileProcessing) {
@@ -263,12 +271,14 @@ public class PreConfigProcessor implements TimerListener {
                     }
                 } else if (currentModified > previousModified) {
                     applicator.trace(context, "Updated preconfig file detected: " + file.getName());
-                    applicator.logInfo(context, "Updated preconfig file detected: " + file.getName());
+                    applicator.logInfo(context, "Updated preconfig file detected: " + file.getName() + " (modified: " + currentModified + ", previous: " + previousModified + ")");
                     try {
                         processFile(file);
                         updatedFiles++;
+                        applicator.logInfo(context, "Successfully processed updated file: " + file.getName());
                     } catch (Exception e) {
                         applicator.logError(context, "Error processing updated file " + file.getName() + ": " + e.getMessage());
+                        e.printStackTrace();
                     }
                 } else {
                     applicator.trace(context, "File already processed: " + file.getName());
