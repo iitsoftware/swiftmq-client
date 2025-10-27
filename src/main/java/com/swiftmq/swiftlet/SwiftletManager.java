@@ -94,7 +94,6 @@ public class SwiftletManager {
     static final String PROP_PRECONFIG = "swiftmq.preconfig";
     static final String PROP_SHUTDOWN_HOOK = "swiftmq.shutdown.hook";
     static final String PROP_REUSE_KERNEL_CL = "swiftmq.reuse.kernel.classloader";
-    static final long PROP_CONFIG_WATCHDOG_INTERVAL = Long.parseLong(System.getProperty("swiftmq.config.watchdog.interval", "0"));
     protected static final AtomicReference<SwiftletManager> _instance = new AtomicReference<>();
     static SimpleDateFormat fmt = new SimpleDateFormat(".yyyyMMddHHmmssSSS");
     final AtomicReference<String> configFilename = new AtomicReference<>();
@@ -115,8 +114,6 @@ public class SwiftletManager {
     LogSwiftlet logSwiftlet = null;
     TraceSwiftlet traceSwiftlet = null;
     TimerSwiftlet timerSwiftlet = null;
-
-    ConfigfileWatchdog configfileWatchdog = null;
 
     TraceSpace traceSpace = null;
     final AtomicLong memCollectInterval = new AtomicLong(10000);
@@ -598,9 +595,9 @@ public class SwiftletManager {
 
         timerSwiftlet = (TimerSwiftlet) getSwiftlet("sys$timer");
 
-        if (PROP_CONFIG_WATCHDOG_INTERVAL > 0) {
-            configfileWatchdog = new ConfigfileWatchdog(traceSpace, logSwiftlet, configFilename.get());
-            timerSwiftlet.addTimerListener(PROP_CONFIG_WATCHDOG_INTERVAL, configfileWatchdog);
+        // Check if deprecated watchdog property is set
+        if (System.getProperty("swiftmq.config.watchdog.interval") != null) {
+            System.err.println("Configuration watch dog has been removed in this release");
         }
 
         // shutdown hook
@@ -930,8 +927,6 @@ public class SwiftletManager {
             System.out.println("Shutdown SwiftMQ " + Version.getKernelVersion() + " " + "[" + getRouterName() + "] ...");
             trace("shutdown");
             saveConfigIfDirty();
-            if (configfileWatchdog != null)
-                timerSwiftlet.removeTimerListener(configfileWatchdog);
             memoryMeter.close();
             stopAllSwiftlets();
             stopKernelSwiftlets();
