@@ -647,9 +647,6 @@ public class SwiftletManager {
 
         timerSwiftlet = (TimerSwiftlet) getSwiftlet("sys$timer");
 
-        // Start runtime preconfig processor (after swiftlets and timer are initialized)
-        startRuntimePreConfigProcessor();
-
         // shutdown hook
         if (shutdownHook == null && registerShutdownHook.get()) {
             shutdownHook = new Thread(() -> shutdown());
@@ -820,6 +817,9 @@ public class SwiftletManager {
             startKernelSwiftlets();
             trace("Init swiftlets successful");
             memoryMeter.start();
+
+            // Start runtime preconfig processor (after swiftlets are initialized)
+            startRuntimePreConfigProcessor();
 
             startup.set(false);
             if (doFireKernelStartedEvent.get())
