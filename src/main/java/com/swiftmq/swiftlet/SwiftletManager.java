@@ -23,10 +23,8 @@ import com.swiftmq.swiftlet.event.KernelStartupListener;
 import com.swiftmq.swiftlet.event.SwiftletManagerEvent;
 import com.swiftmq.swiftlet.event.SwiftletManagerListener;
 import com.swiftmq.swiftlet.log.LogSwiftlet;
-import com.swiftmq.swiftlet.preconfig.ManagementTreeApplicator;
 import com.swiftmq.swiftlet.preconfig.PreConfigProcessor;
 import com.swiftmq.swiftlet.preconfig.RouterConfigApplicator;
-import com.swiftmq.swiftlet.preconfig.SaveConfigCallback;
 import com.swiftmq.swiftlet.timer.TimerSwiftlet;
 import com.swiftmq.swiftlet.trace.TraceSpace;
 import com.swiftmq.swiftlet.trace.TraceSwiftlet;
@@ -114,7 +112,6 @@ public class SwiftletManager {
     Map<String, Object> surviveMap = new ConcurrentHashMap<String, Object>();
     RouterMemoryMeter memoryMeter = null;
     SwiftletDeployer swiftletDeployer = null;
-    PreConfigProcessor runtimePreConfigProcessor = null;
 
     LogSwiftlet logSwiftlet = null;
     TraceSwiftlet traceSwiftlet = null;
@@ -570,35 +567,6 @@ public class SwiftletManager {
     }
 
     /**
-     * Starts the runtime preconfig processor with timer-based monitoring.
-     * This is called after all Swiftlets are started.
-     */
-    private void startRuntimePreConfigProcessor() {
-        try {
-            // Create SaveConfigCallback
-            SaveConfigCallback saveCallback = () -> {
-                try {
-                    saveConfiguration();
-                } catch (Exception e) {
-                    logSwiftlet.logError("SwiftletManager/PreConfig", "Failed to save configuration: " + e.getMessage());
-                }
-            };
-
-            // Create ManagementTreeApplicator and PreConfigProcessor
-            ManagementTreeApplicator applicator = new ManagementTreeApplicator(traceSpace, logSwiftlet);
-            runtimePreConfigProcessor = new PreConfigProcessor(applicator, "SwiftletManager/PreConfig", saveCallback);
-
-            // Register with timer for periodic monitoring
-            timerSwiftlet.addTimerListener(runtimePreConfigProcessor.getWatchdogInterval(), runtimePreConfigProcessor);
-
-            // Log startup of watchdog
-            runtimePreConfigProcessor.startWatchdog();
-        } catch (Exception e) {
-            logSwiftlet.logError("SwiftletManager/PreConfig", "Failed to start runtime preconfig processor: " + e.getMessage());
-        }
-    }
-
-    /**
      * Starts the router.
      * This method is called from the bootstrap class only.
      *
@@ -808,10 +776,6 @@ public class SwiftletManager {
             startKernelSwiftlets();
             trace("Init swiftlets successful");
             memoryMeter.start();
-
-            // Start runtime preconfig processor (after swiftlets are initialized)
-            startRuntimePreConfigProcessor();
-
             startup.set(false);
             if (doFireKernelStartedEvent.get())
                 fireKernelStartedEvent();
@@ -970,10 +934,6 @@ public class SwiftletManager {
             trace("shutdown");
             saveConfigIfDirty();
             memoryMeter.close();
-            if (runtimePreConfigProcessor != null && timerSwiftlet != null) {
-                timerSwiftlet.removeTimerListener(runtimePreConfigProcessor);
-                runtimePreConfigProcessor = null;
-            }
             stopAllSwiftlets();
             stopKernelSwiftlets();
             listeners.clear();
