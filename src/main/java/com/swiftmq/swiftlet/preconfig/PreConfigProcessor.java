@@ -65,8 +65,8 @@ public class PreConfigProcessor implements TimerListener {
         this.watchdogDir = System.getProperty(PROP_WATCHDOG_DIR, DEFAULT_DIR);
         this.watchdogInterval = Long.parseLong(System.getProperty(PROP_WATCHDOG_INTERVAL, String.valueOf(DEFAULT_INTERVAL)));
 
-        // Don't log in constructor - only log when startWatchdog() is called
         applicator.trace(context, "PreConfigProcessor initialized with dir=" + watchdogDir + ", interval=" + watchdogInterval + "ms");
+        applicator.logInfo(context, "PreConfigProcessor initialized with dir=" + watchdogDir + ", interval=" + watchdogInterval + "ms");
     }
 
     /**
@@ -84,8 +84,8 @@ public class PreConfigProcessor implements TimerListener {
         this.watchdogDir = System.getProperty(PROP_WATCHDOG_DIR, DEFAULT_DIR);
         this.watchdogInterval = Long.parseLong(System.getProperty(PROP_WATCHDOG_INTERVAL, String.valueOf(DEFAULT_INTERVAL)));
 
-        // Don't log in constructor - only log when startWatchdog() is called (for runtime use)
         applicator.trace(context, "PreConfigProcessor initialized with dir=" + watchdogDir + ", interval=" + watchdogInterval + "ms");
+        applicator.logInfo(context, "PreConfigProcessor initialized with dir=" + watchdogDir + ", interval=" + watchdogInterval + "ms");
     }
 
     /**
@@ -287,7 +287,6 @@ public class PreConfigProcessor implements TimerListener {
      * Logs the start of the watchdog at INFO level.
      */
     public void startWatchdog() {
-        applicator.logInfo(context, "PreConfigProcessor initialized with dir=" + watchdogDir + ", interval=" + watchdogInterval + "ms");
         applicator.logInfo(context, "Starting preconfig watchdog with interval " + watchdogInterval + "ms");
     }
 
