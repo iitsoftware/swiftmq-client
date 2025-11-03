@@ -35,7 +35,4 @@ public class ProtocolVisitorAdapter implements ProtocolVisitor {
 
     public void visit(SessionCloseRequest request) {
     }
-
-    public void visit(FileQueryPropsRequest request) {
-    }
 }

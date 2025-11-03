@@ -2,7 +2,7 @@
 
 SwiftMQ Client is an open source (Apache 2) library that contains:
 
-- SwiftMQ JNDI client to access SwiftMQ's Federated JNDI as well as a Filesystem JNDI.
+- SwiftMQ JNDI client to access SwiftMQ's Federated JNDI.
 - SwiftMQ JMS 1.1 client to connect to a SwiftMQ Router via JNDI/JMS.
 - SwiftMQ Filetransfer over JMS client to transfer files of unlimited size over JMS.
 - SwiftMQ CLI administration client (command line interface).
