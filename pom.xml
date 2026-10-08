@@ -58,7 +58,7 @@
     <dependency>
       <groupId>org.jline</groupId>
       <artifactId>jline-terminal</artifactId>
-      <version>3.30.6</version>
+      <version>3.30.15</version>
     </dependency>
   </dependencies>
 
