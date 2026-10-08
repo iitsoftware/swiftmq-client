@@ -112,7 +112,7 @@ public class QueuePushTransaction extends QueueTransaction {
             verifyTransactionState();
         } catch (QueueTransactionClosedException e) {
             callback.setException(e);
-            callback.done(false);
+            callback.notifyCallbackStack(false);
             return;
         }
         setClosed(true);
@@ -160,7 +160,7 @@ public class QueuePushTransaction extends QueueTransaction {
             verifyTransactionState();
         } catch (QueueTransactionClosedException e) {
             callback.setException(e);
-            callback.done(false);
+            callback.notifyCallbackStack(false);
             return;
         }
         setClosed(true);
