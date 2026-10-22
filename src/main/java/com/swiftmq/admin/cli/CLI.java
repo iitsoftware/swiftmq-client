@@ -670,6 +670,16 @@ public class CLI implements ReconnectListener {
         return programmatic;
     }
 
+    /**
+     * Prints a message arriving asynchronously (from another thread) above the input line being edited.
+     */
+    private void printAsync(String msg) {
+        if (inReader != null)
+            inReader.printAbove(msg);
+        else
+            System.out.println(msg);
+    }
+
     public void markRouter(String routerName, boolean available) {
         if (available) {
             availableRouters.add(routerName);
@@ -678,7 +688,7 @@ public class CLI implements ReconnectListener {
             if (programmatic) {
                 fireRouterEvent(routerName, true);
             } else {
-                System.out.println("Router '" + routerName + "' is available for administration.");
+                printAsync("Router '" + routerName + "' is available for administration.");
                 waitForRouters.notifySingleWaiter();
             }
         } else {
@@ -687,7 +697,7 @@ public class CLI implements ReconnectListener {
             if (programmatic)
                 fireRouterEvent(routerName, false);
             else
-                System.out.println("Router '" + routerName + "' is unavailable for administration.");
+                printAsync("Router '" + routerName + "' is unavailable for administration.");
         }
     }
 
@@ -887,9 +897,9 @@ public class CLI implements ReconnectListener {
             connectionHolder.setExceptionListener(new ExceptionListener() {
                 public void onException(Exception e) {
                     if (e.getMessage() == null)
-                        System.out.println("Connection lost.");
+                        printAsync("Connection lost.");
                     else
-                        System.out.println("Exception occurred: " + e.getMessage());
+                        printAsync("Exception occurred: " + e.getMessage());
                     System.exit(-1);
                 }
             });

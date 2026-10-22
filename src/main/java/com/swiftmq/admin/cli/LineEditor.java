@@ -33,6 +33,9 @@ import java.util.List;
  * Known limitations in RAW mode: the terminal width is not queried, so lines wider than the terminal
  * (prompt + input) are not redrawn correctly. Every code point is assumed to occupy one column, so the
  * cursor is misplaced after double-width characters (CJK, most emoji).
+ * <p>
+ * Other threads print asynchronous messages through {@link #printAbove(String)} so they don't
+ * end up in the middle of the line being edited.
  */
 public class LineEditor {
     private enum Mode {RAW, CONSOLE, PLAIN}
@@ -51,6 +54,11 @@ public class LineEditor {
     private Reader rawReader;
     private BufferedReader plainReader;
     private volatile boolean rawActive = false;
+    // State of the line being edited in RAW mode, guarded by this. editPrompt is non-null while a read is in progress
+    private final StringBuilder editBuf = new StringBuilder();
+    private String editPrompt = null;
+    private int editCursor = 0;
+    private boolean editMask = false;
 
     public LineEditor() {
         if (System.getProperty("os.name", "").startsWith("Windows")) {
@@ -79,6 +87,22 @@ public class LineEditor {
         return read(prompt, true);
     }
 
+    /**
+     * Prints a message from another thread. In RAW mode with a read in progress, the input line is
+     * cleared, the message printed and the prompt plus the typed text (masked for passwords) redrawn
+     * below it with the cursor restored. Otherwise the message is simply printed.
+     *
+     * @param msg the message
+     */
+    public synchronized void printAbove(String msg) {
+        if (editPrompt == null) {
+            System.out.println(msg);
+            return;
+        }
+        System.out.print("\r\u001B[K" + msg + "\n");
+        redraw();
+    }
+
     private String read(String prompt, boolean mask) throws IOException {
         switch (mode) {
             case CONSOLE:
@@ -104,93 +128,112 @@ public class LineEditor {
     }
 
     private String edit(String prompt, boolean mask) throws IOException {
-        StringBuilder buf = new StringBuilder();
-        int cursor = 0;
         int histIdx = history.size();
         String pending = "";
-        redraw(prompt, buf, cursor, mask);
-        while (true) {
-            int c = readKey();
-            switch (c) {
-                case -1:
-                case CTRL_C:
-                    newline();
-                    return null;
-                case '\r':
-                case '\n':
-                    newline();
-                    String line = buf.toString();
-                    if (!mask)
-                        addHistory(line);
-                    return line;
-                case CTRL_D:
-                    if (buf.length() == 0) {
-                        newline();
-                        return null;
-                    }
-                    if (cursor < buf.length())
-                        buf.delete(cursor, buf.offsetByCodePoints(cursor, 1));
-                    break;
-                case KEY_DELETE:
-                    if (cursor < buf.length())
-                        buf.delete(cursor, buf.offsetByCodePoints(cursor, 1));
-                    break;
-                case DEL:
-                case BS:
-                    if (cursor > 0) {
-                        int start = buf.offsetByCodePoints(cursor, -1);
-                        buf.delete(start, cursor);
-                        cursor = start;
-                    }
-                    break;
-                case KEY_LEFT:
-                    if (cursor > 0)
-                        cursor = buf.offsetByCodePoints(cursor, -1);
-                    break;
-                case KEY_RIGHT:
-                    if (cursor < buf.length())
-                        cursor = buf.offsetByCodePoints(cursor, 1);
-                    break;
-                case CTRL_A:
-                case KEY_HOME:
-                    cursor = 0;
-                    break;
-                case CTRL_E:
-                case KEY_END:
-                    cursor = buf.length();
-                    break;
-                case CTRL_U:
-                    buf.delete(0, cursor);
-                    cursor = 0;
-                    break;
-                case KEY_UP:
-                    if (mask || histIdx == 0)
-                        break;
-                    if (histIdx == history.size())
-                        pending = buf.toString();
-                    buf.setLength(0);
-                    buf.append(history.get(--histIdx));
-                    cursor = buf.length();
-                    break;
-                case KEY_DOWN:
-                    if (mask || histIdx == history.size())
-                        break;
-                    histIdx++;
-                    buf.setLength(0);
-                    buf.append(histIdx == history.size() ? pending : history.get(histIdx));
-                    cursor = buf.length();
-                    break;
-                default:
-                    // Ignore remaining control characters and unmapped escape sequences
-                    if (c < 0x20 || c >= KEY_NONE)
-                        break;
-                    buf.insert(cursor++, (char) c);
-                    // Keep surrogate pairs (e.g. emoji) together so they are never split by editing
-                    if (Character.isHighSurrogate((char) c) && (c = rawReader.read()) != -1)
-                        buf.insert(cursor++, (char) c);
-            }
-            redraw(prompt, buf, cursor, mask);
+        synchronized (this) {
+            editPrompt = prompt;
+            editMask = mask;
+            editBuf.setLength(0);
+            editCursor = 0;
+            redraw();
         }
+        try {
+            while (true) {
+                // Block outside the lock so printAbove can run while waiting for a key
+                int c = readKey();
+                // Keep surrogate pairs (e.g. emoji) together so they are never split by editing
+                int low = c < KEY_NONE && Character.isHighSurrogate((char) c) ? rawReader.read() : -1;
+                synchronized (this) {
+                    switch (c) {
+                        case -1:
+                        case CTRL_C:
+                            return endEdit(null);
+                        case '\r':
+                        case '\n':
+                            String line = editBuf.toString();
+                            if (!editMask)
+                                addHistory(line);
+                            return endEdit(line);
+                        case CTRL_D:
+                            if (editBuf.length() == 0)
+                                return endEdit(null);
+                            if (editCursor < editBuf.length())
+                                editBuf.delete(editCursor, editBuf.offsetByCodePoints(editCursor, 1));
+                            break;
+                        case KEY_DELETE:
+                            if (editCursor < editBuf.length())
+                                editBuf.delete(editCursor, editBuf.offsetByCodePoints(editCursor, 1));
+                            break;
+                        case DEL:
+                        case BS:
+                            if (editCursor > 0) {
+                                int start = editBuf.offsetByCodePoints(editCursor, -1);
+                                editBuf.delete(start, editCursor);
+                                editCursor = start;
+                            }
+                            break;
+                        case KEY_LEFT:
+                            if (editCursor > 0)
+                                editCursor = editBuf.offsetByCodePoints(editCursor, -1);
+                            break;
+                        case KEY_RIGHT:
+                            if (editCursor < editBuf.length())
+                                editCursor = editBuf.offsetByCodePoints(editCursor, 1);
+                            break;
+                        case CTRL_A:
+                        case KEY_HOME:
+                            editCursor = 0;
+                            break;
+                        case CTRL_E:
+                        case KEY_END:
+                            editCursor = editBuf.length();
+                            break;
+                        case CTRL_U:
+                            editBuf.delete(0, editCursor);
+                            editCursor = 0;
+                            break;
+                        case KEY_UP:
+                            if (editMask || histIdx == 0)
+                                break;
+                            if (histIdx == history.size())
+                                pending = editBuf.toString();
+                            editBuf.setLength(0);
+                            editBuf.append(history.get(--histIdx));
+                            editCursor = editBuf.length();
+                            break;
+                        case KEY_DOWN:
+                            if (editMask || histIdx == history.size())
+                                break;
+                            histIdx++;
+                            editBuf.setLength(0);
+                            editBuf.append(histIdx == history.size() ? pending : history.get(histIdx));
+                            editCursor = editBuf.length();
+                            break;
+                        default:
+                            // Ignore remaining control characters and unmapped escape sequences
+                            if (c < 0x20 || c >= KEY_NONE)
+                                break;
+                            editBuf.insert(editCursor++, (char) c);
+                            if (low != -1)
+                                editBuf.insert(editCursor++, (char) low);
+                    }
+                    redraw();
+                }
+            }
+        } finally {
+            synchronized (this) {
+                editPrompt = null;
+            }
+        }
+    }
+
+    /**
+     * Ends the read while still holding the lock, so printAbove never redraws a line already terminated.
+     */
+    private String endEdit(String result) {
+        editPrompt = null;
+        newline();
+        return result;
     }
 
     private int readKey() throws IOException {
@@ -239,14 +282,14 @@ public class LineEditor {
         return KEY_NONE;
     }
 
-    private void redraw(String prompt, StringBuilder buf, int cursor, boolean mask) {
-        StringBuilder out = new StringBuilder("\r").append(prompt);
-        if (mask)
-            out.append("*".repeat(buf.codePointCount(0, buf.length())));
+    private void redraw() {
+        StringBuilder out = new StringBuilder("\r").append(editPrompt);
+        if (editMask)
+            out.append("*".repeat(editBuf.codePointCount(0, editBuf.length())));
         else
-            out.append(buf);
+            out.append(editBuf);
         out.append("\u001B[K");
-        int back = buf.codePointCount(cursor, buf.length());
+        int back = editBuf.codePointCount(editCursor, editBuf.length());
         if (back > 0)
             out.append("\u001B[").append(back).append('D');
         System.out.print(out);
