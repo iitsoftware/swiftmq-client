@@ -30,8 +30,9 @@ import java.util.List;
  * <li>CONSOLE: Windows with a console. Delegates to {@link Console}, which provides history itself.</li>
  * <li>PLAIN: no TTY (piped input). Reads lines from stdin, never emits ANSI sequences.</li>
  * </ul>
- * Known limitation: the terminal width is not queried, so lines wider than the terminal
- * (prompt + input) are not redrawn correctly in RAW mode.
+ * Known limitations in RAW mode: the terminal width is not queried, so lines wider than the terminal
+ * (prompt + input) are not redrawn correctly. Every code point is assumed to occupy one column, so the
+ * cursor is misplaced after double-width characters (CJK, most emoji).
  */
 public class LineEditor {
     private enum Mode {RAW, CONSOLE, PLAIN}
@@ -128,24 +129,27 @@ public class LineEditor {
                         return null;
                     }
                     if (cursor < buf.length())
-                        buf.deleteCharAt(cursor);
+                        buf.delete(cursor, buf.offsetByCodePoints(cursor, 1));
                     break;
                 case KEY_DELETE:
                     if (cursor < buf.length())
-                        buf.deleteCharAt(cursor);
+                        buf.delete(cursor, buf.offsetByCodePoints(cursor, 1));
                     break;
                 case DEL:
                 case BS:
-                    if (cursor > 0)
-                        buf.deleteCharAt(--cursor);
+                    if (cursor > 0) {
+                        int start = buf.offsetByCodePoints(cursor, -1);
+                        buf.delete(start, cursor);
+                        cursor = start;
+                    }
                     break;
                 case KEY_LEFT:
                     if (cursor > 0)
-                        cursor--;
+                        cursor = buf.offsetByCodePoints(cursor, -1);
                     break;
                 case KEY_RIGHT:
                     if (cursor < buf.length())
-                        cursor++;
+                        cursor = buf.offsetByCodePoints(cursor, 1);
                     break;
                 case CTRL_A:
                 case KEY_HOME:
@@ -181,6 +185,9 @@ public class LineEditor {
                     if (c < 0x20 || c >= KEY_NONE)
                         break;
                     buf.insert(cursor++, (char) c);
+                    // Keep surrogate pairs (e.g. emoji) together so they are never split by editing
+                    if (Character.isHighSurrogate((char) c) && (c = rawReader.read()) != -1)
+                        buf.insert(cursor++, (char) c);
             }
             redraw(prompt, buf, cursor, mask);
         }
@@ -235,11 +242,11 @@ public class LineEditor {
     private void redraw(String prompt, StringBuilder buf, int cursor, boolean mask) {
         StringBuilder out = new StringBuilder("\r").append(prompt);
         if (mask)
-            out.append("*".repeat(buf.length()));
+            out.append("*".repeat(buf.codePointCount(0, buf.length())));
         else
             out.append(buf);
         out.append("\u001B[K");
-        int back = buf.length() - cursor;
+        int back = buf.codePointCount(cursor, buf.length());
         if (back > 0)
             out.append("\u001B[").append(back).append('D');
         System.out.print(out);
