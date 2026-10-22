@@ -28,9 +28,6 @@ import com.swiftmq.tools.collection.ConcurrentList;
 import com.swiftmq.tools.concurrent.Semaphore;
 import com.swiftmq.tools.requestreply.RequestService;
 import com.swiftmq.util.SwiftUtilities;
-import org.jline.reader.LineReader;
-import org.jline.reader.LineReaderBuilder;
-import org.jline.terminal.TerminalBuilder;
 
 import javax.jms.QueueConnection;
 import javax.jms.QueueConnectionFactory;
@@ -83,8 +80,7 @@ public class CLI implements ReconnectListener {
     private static String INIT_FILE_PROP = "swiftmq.cli.init";
     private static final String DEFAULT_INIT_FILE = System.getProperty("user.home") + File.separatorChar + ".init.cli";
     ConnectionHolder connectionHolder = null;
-    LineReader inReader = null;
-    //  BufferedReader inReader = new BufferedReader(new InputStreamReader(System.in));
+    LineEditor inReader = null;
     BufferedReader scriptReader = null;
     boolean programmatic = false;
     Semaphore waitSem = new Semaphore();
@@ -340,9 +336,7 @@ public class CLI implements ReconnectListener {
 
     CLI(String smqpURL, String qcfName, String scriptFile) throws Exception {
         this();
-        inReader = LineReaderBuilder.builder()
-                .terminal(TerminalBuilder.terminal())
-                .build();
+        inReader = new LineEditor();
         Hashtable env = new Hashtable();
         env.put(Context.INITIAL_CONTEXT_FACTORY, "com.swiftmq.jndi.InitialContextFactoryImpl");
         env.put(Context.PROVIDER_URL, smqpURL);
@@ -363,9 +357,7 @@ public class CLI implements ReconnectListener {
 
     public CLI(ConnectionHolder connectionHolder, String scriptFile) throws Exception {
         this();
-        inReader = LineReaderBuilder.builder()
-                .terminal(TerminalBuilder.terminal())
-                .build();
+        inReader = new LineEditor();
         this.connectionHolder = connectionHolder;
         String filename = System.getProperty(INIT_FILE_PROP, DEFAULT_INIT_FILE);
         if (new File(filename).exists())
@@ -737,11 +729,13 @@ public class CLI implements ReconnectListener {
         markRouter(endpoint.getRouterName(), true);
     }
 
-    private String readLine(boolean nullOnEmpty, boolean isPassword) {
+    // The prompt is only passed to the editor, which prints it when reading interactively; script lines are read without a prompt
+    private String readLine(String prompt, boolean nullOnEmpty, boolean isPassword) {
         String line = null;
         boolean ok = false;
         try {
             while (!ok) {
+                line = null;
                 if (scriptReader != null) {
                     line = scriptReader.readLine();
                     if (line == null) {
@@ -750,8 +744,8 @@ public class CLI implements ReconnectListener {
                     }
                 }
                 if (line == null)
-                    line = isPassword ? inReader.readLine(new Character('*')) : inReader.readLine();
-                ok = line != null && !line.trim().startsWith("#") || line == null;
+                    line = isPassword ? inReader.readPassword(prompt) : inReader.readLine(prompt);
+                ok = line == null || !line.trim().startsWith("#");
             }
             if (nullOnEmpty && line != null && line.equals(""))
                 line = null;
@@ -846,9 +840,7 @@ public class CLI implements ReconnectListener {
             } else
                 prompt = "";
             prompt += "> ";
-            if (scriptReader == null)
-                System.out.print(prompt);
-            String command = readLine(false, false);
+            String command = readLine(prompt, false, false);
             if (command == null) {
                 System.out.println("Bye.");
                 return;
@@ -873,10 +865,8 @@ public class CLI implements ReconnectListener {
             System.out.println();
             System.out.println("Welcome to SwiftMQ!");
             System.out.println();
-            System.out.print("Username: ");
-            userName = readLine(true, false);
-            System.out.print("Password: ");
-            password = readLine(true, true);
+            userName = readLine("Username: ", true, false);
+            password = readLine("Password: ", true, true);
         } else {
             userName = System.getProperty("cli.username");
             password = System.getProperty("cli.password");
