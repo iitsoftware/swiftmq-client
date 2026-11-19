@@ -44,7 +44,8 @@ public class Entity implements Dumpable {
     String description = null;
     boolean dynamic = false;
     transient Object userObject = null;
-    transient Object dynamicObject = null;
+    // volatile: read by the parent in removeDynamicEntity without taking this entity's lock
+    transient volatile Object dynamicObject = null;
     String[] dynamicPropNames = null;
     CommandRegistry commandRegistry = null;
     Entity parent = null;
@@ -428,52 +429,45 @@ public class Entity implements Dumpable {
      * Internal use only.
      */
     public String[] getContext() {
-        lock.readLock().lock();
-        try {
-            if (_ctx != null)
-                return _ctx;
-            List al = new ArrayList();
-            Entity actEntity = this;
-            while (actEntity != null) {
-                al.add(actEntity.getName());
-                actEntity = actEntity.getParent();
-            }
-            String[] ctx = new String[al.size()];
-            int j = 0;
-            for (int i = al.size() - 1; i >= 0; i--)
-                ctx[j++] = (String) al.get(i);
-            _ctx = ctx;
-            return _ctx;
-        } finally {
-            lock.readLock().unlock();
+        // No lock held while walking up: holding this entity's lock while locking the parent
+        // inverts the parent->child lock order of add/removeEntity and can deadlock (SWIF-370).
+        String[] ctx = _ctx;
+        if (ctx != null)
+            return ctx;
+        List al = new ArrayList();
+        Entity actEntity = this;
+        while (actEntity != null) {
+            al.add(actEntity.getName());
+            actEntity = actEntity.getParent();
         }
-
+        ctx = new String[al.size()];
+        int j = 0;
+        for (int i = al.size() - 1; i >= 0; i--)
+            ctx[j++] = (String) al.get(i);
+        _ctx = ctx;
+        return ctx;
     }
 
     /**
      * Internal use only.
      */
     public String[] getDisplayContext() {
-        lock.readLock().lock();
-        try {
-            if (_dctx != null)
-                return _dctx;
-            ArrayList al = new ArrayList();
-            Entity actEntity = this;
-            while (actEntity != null) {
-                al.add(actEntity.getDisplayName());
-                actEntity = actEntity.getParent();
-            }
-            String[] ctx = new String[al.size()];
-            int j = 0;
-            for (int i = al.size() - 1; i >= 0; i--)
-                ctx[j++] = (String) al.get(i);
-            _dctx = ctx;
-            return _dctx;
-        } finally {
-            lock.readLock().unlock();
+        // No lock held while walking up, see getContext()
+        String[] ctx = _dctx;
+        if (ctx != null)
+            return ctx;
+        ArrayList al = new ArrayList();
+        Entity actEntity = this;
+        while (actEntity != null) {
+            al.add(actEntity.getDisplayName());
+            actEntity = actEntity.getParent();
         }
-
+        ctx = new String[al.size()];
+        int j = 0;
+        for (int i = al.size() - 1; i >= 0; i--)
+            ctx[j++] = (String) al.get(i);
+        _dctx = ctx;
+        return ctx;
     }
 
 
@@ -853,10 +847,10 @@ public class Entity implements Dumpable {
         lock.writeLock().lock();
         try {
             for (Iterator iter = entities.entrySet().iterator(); iter.hasNext(); ) {
-                entity = (Entity) ((Map.Entry) iter.next()).getValue();
-                if (entity.getDynamicObject() == dynamicObject) {
-                    entity.setDynamicObject(null);
-                    entity.setParent(null);
+                Entity e = (Entity) ((Map.Entry) iter.next()).getValue();
+                // Read the volatile field directly; never lock a child while holding this lock (SWIF-370)
+                if (e.dynamicObject == dynamicObject) {
+                    entity = e;
                     iter.remove();
                     break;
                 }
@@ -865,8 +859,11 @@ public class Entity implements Dumpable {
             lock.writeLock().unlock();
         }
 
-        if (entity != null)
+        if (entity != null) {
+            entity.setDynamicObject(null);
+            entity.setParent(null);
             notifyEntityWatchListeners(false, entity);
+        }
     }
 
 
