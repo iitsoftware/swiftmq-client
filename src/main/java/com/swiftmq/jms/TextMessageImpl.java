@@ -138,9 +138,6 @@ public class TextMessageImpl extends MessageImpl implements TextMessage {
         StringBuffer b = new StringBuffer("[TextMessageImpl ");
         b.append(super.toString());
         b.append("\n");
-        b.append("lazy=");
-        b.append(lazy);
-        b.append("\n");
         if (lazy != null) {
             b.append("lazy.length=");
             b.append(lazy.length);

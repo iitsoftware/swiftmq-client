@@ -18,7 +18,6 @@
 package com.swiftmq.tools.util;
 
 import java.io.*;
-import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class LazyUTF8String implements Serializable {
@@ -109,7 +108,12 @@ public class LazyUTF8String implements Serializable {
     }
 
     public String toString() {
-        return "[LazyUTF8String, s=" + s.get() + ", buffer=" + Arrays.toString(buffer.get()) + "]";
+        // Decodes but keeps the buffer, so a later writeContent() is unaffected
+        try {
+            return getString();
+        } catch (Exception e) {
+            return "[LazyUTF8String, utfLength=" + utfLength + ", undecodable]";
+        }
     }
 
 }
