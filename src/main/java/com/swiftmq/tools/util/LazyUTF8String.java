@@ -108,9 +108,12 @@ public class LazyUTF8String implements Serializable {
     }
 
     public String toString() {
-        // Decodes but keeps the buffer, so a later writeContent() is unaffected
+        // Logging only: decode without caching, so laziness and unfold() buffer release are unaffected
+        String current = s.get();
+        if (current != null)
+            return current;
         try {
-            return getString();
+            return bufferToString();
         } catch (Exception e) {
             return "[LazyUTF8String, utfLength=" + utfLength + ", undecodable]";
         }
